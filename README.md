@@ -88,3 +88,19 @@ docs/       architecture, data model, roadmap, ADRs
 ```
 
 More directories (`sources/`, `pipelines/`, `mcp/`, `bundles/`) are added as each milestone lands.
+
+## Data sources and attribution
+
+Raw data is never committed; `make data` downloads it (`scripts/fetch_data.sh`). Larkspur Foods and its documents are fictional. Supplier names come from public procurement records. Sanctions near-matches are planted only on fictional suppliers, and screening alerts on real names are labelled "pending review", never "sanctioned" ([ADR 0003](docs/adr/0003-real-public-plus-synthetic-data.md)).
+
+| Dataset | Licence | Used for |
+|---|---|---|
+| [SAP DATASET](https://www.kaggle.com/datasets/mustafakeser4/sap-dataset-bigquery-dataset) by mustafakeser4 (copy of Google's `cloud-training-demos.SAP_REPLICATED_DATA`) | MIT | SAP vendor master and purchasing tables |
+| [Polish public tenders](https://www.kaggle.com/datasets/michalpozoga/polish-public-tenders) by Michał Pożoga | CC BY 4.0 | Polish suppliers (company code PL01); names and NIP used as published, sampled |
+| [ProZorro public procurement](https://www.kaggle.com/datasets/oleksastepaniuk/prozorro-public-procurement-dataset) by Oleksa Stepaniuk | CC0 | Ukrainian suppliers in Cyrillic (UA01) |
+| [World Bank corporate procurement contract awards](https://www.kaggle.com/datasets/theworldbank/corporate-procurement-contract-awards) | CC0 | International indirect-spend vendors |
+| [Amazon ML Challenge 2026 mirror](https://www.kaggle.com/datasets/satwiksps/amazon-ml-challenge-2026) by satwiksps | MIT (as stated by the mirror) | External entity-resolution benchmark only |
+| [OFAC SDN list](https://ofac.treasury.gov/specially-designated-nationals-and-blocked-persons-list-sdn-human-readable-lists) | US government work (public domain) | Sanctions screening |
+| [Company Documents Dataset](https://www.kaggle.com/datasets/ayoubcherguelaine/company-documents-dataset), [Procurement Invoice Fraud](https://www.kaggle.com/datasets/tokelomashile2/procurement-invoice-fraud-dataset) | Apache-2.0 | Downloaded for reference; not used in outputs |
+| [Supply Chain Datasets](https://www.kaggle.com/datasets/ayodejiibrahimlateef/supply-chain-datasets) | CC BY 4.0 | Downloaded for reference; not used in outputs |
+| [Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) | CC BY-NC-SA 4.0 | Not used (no rows republished) |

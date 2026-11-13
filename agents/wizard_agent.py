@@ -23,10 +23,11 @@ from databricks.sdk import WorkspaceClient
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
-WIZARD_URL = os.environ.get("WIZARD_MCP_URL", "https://wizard-mcp-7474645457804277.aws.databricksapps.com")
 PROFILE = os.environ.get("DATABRICKS_CONFIG_PROFILE", "wizard")
 DEFAULT_MODEL = "databricks-qwen3-next-80b-a3b-instruct"  # 12/12 and fastest in the tool-calling benchmark (ADR 0005)
 w = WorkspaceClient(profile=PROFILE)
+# the deployed app's URL, looked up rather than hard-coded (it contains the workspace id)
+WIZARD_URL = os.environ.get("WIZARD_MCP_URL") or w.apps.get("wizard-mcp").url
 
 
 def wizard_servers() -> list[tuple[str, str, dict]]:
