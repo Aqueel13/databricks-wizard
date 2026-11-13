@@ -14,8 +14,8 @@ All tables live in the `wizard` catalog. Bronze and silver keep source-system na
 | GLEIF | Real legal entity reference | LEI, legal name **in local language and script**, transliterated and other names, address, parent relationships | API lookups for in-scope suppliers |
 | OFAC SDN | Real sanctions list | sanctioned entities and aliases (many transliterated from Cyrillic and Arabic) | Snapshot |
 | SEC EDGAR | Real financial signals | company facts (revenue, net income, filings) | API snapshot for listed suppliers |
-| ProZorro (Ukraine) | Regional ERP: Ukrainian operations | real supplier names in **Cyrillic**, EDRPOU company IDs, tender awards | Kaggle snapshot, replayed through a regional company code |
-| Polish public tenders (BZP + TED) | Regional ERP: Polish operations | real contractor names with **Polish diacritics**, NIP/REGON IDs, awards | Kaggle snapshot, replayed through a regional company code |
+| ProZorro (Ukraine) | Regional ERP: Ukrainian operations | real supplier names in **Cyrillic**, EDRPOU company IDs, tender awards (2015–2019) | Kaggle snapshot (CC0), replayed through company code UA01 |
+| Polish public tenders (BZP + TED) | Regional ERP: Polish operations | 81,674 real contractors with **Polish diacritics** and NIP, awards (2024–present) | Kaggle snapshot (CC BY 4.0), replayed through company code PL01 |
 
 ## Multilingual suppliers
 
@@ -40,21 +40,24 @@ Matching problems this adds:
 
 The same multilingual matching is used for **sanctions screening**, since many OFAC aliases are transliterations.
 
-## Candidate Kaggle datasets
+## External datasets
 
-Found on 2026-11-13. Contents and licences are **not yet verified** (this needs a Kaggle API token).
+Checked via the Kaggle API on 2026-11-13 (licence from dataset metadata; contents profiled where noted). Raw data is never committed. `make data` downloads it.
 
-| Dataset | Intended role | Status |
-|---|---|---|
-| SAP DATASET (mustafakeser4) | Real SAP structures (`LFA1`, `EKKO`, `EKPO`, `RBKP`, `RSEG`) for the SAP mock | To verify |
-| CUAD (Atticus Project) | Real commercial contracts plus expert clause labels for the document layer and extraction scoring | To verify (CC BY 4.0 at origin) |
-| Amazon ML Challenge 2026 entity resolution | External benchmark for the matcher | To verify; internal use only if competition terms apply |
-| World Bank Corporate Procurement Contract Awards | Real indirect spend with international vendor names | To verify |
-| ProZorro, Polish public tenders | Multilingual regional suppliers | To verify |
-| Company Documents Dataset (Northwind) | Invoice and PO PDFs | To verify |
-| Procurement Invoice Fraud Dataset | Invoice-anomaly signal with labels | To verify |
-| Supply Chain Datasets | Small Coupa-style source with planned/actual delivery | To verify |
-| Olist | Real delivery-delay distributions for the generator | To verify (CC BY-NC-SA at origin) |
+| Dataset | Licence | What's actually in it | Role | Decision |
+|---|---|---|---|---|
+| [SAP DATASET](https://www.kaggle.com/datasets/mustafakeser4/sap-dataset-bigquery-dataset) (copy of Google's `cloud-training-demos.SAP_REPLICATED_DATA`) | MIT | ~70 real SAP tables incl. `LFA1`, `EKKO`, `EKPO`, `EKET`, `EKBE`, `RBKP`, `RSEG`, `ADRC`, `T001`, `TCURR`. **Profiled:** 3,035 vendors (US 1,387, DE 979, then CA/CN/NL/FR/JP/IN); demo-style names with natural duplicates (`C.E.B. BERLIN` ×2); 76,362 POs dated 2018-04 to 2022-04, but **only 38 vendors have POs** | SAP S/4 mock: vendor master and document flows | **Use.** Keep real structures and links. Spread POs across the full supplier universe and shift dates to the last 3 years. Skip `dd03l` (1 GB data dictionary) |
+| [Amazon ML Challenge 2026 mirror](https://www.kaggle.com/datasets/satwiksps/amazon-ml-challenge-2026) | MIT (as stated by the mirror) | 3 sources (`entity_id`, `business_name`, `business_address`, `country`) plus ground truth. **Profiled:** 2.2M source-1 records, **US 60% / India 40%**, avg 3.5 matches per record, 123k with no match | External benchmark for the matcher | **Use a 50k sample** for internal benchmarking only; never republish. Records are small businesses, not suppliers, so the benchmark tests the matcher rather than the domain |
+| [Polish public tenders](https://www.kaggle.com/datasets/michalpozoga/polish-public-tenders) | CC BY 4.0 | **Profiled:** 81,674 contractors with real **NIP**, names with diacritics and legal forms (`Sp. z o.o.`, `SPÓŁKA JAWNA`), inconsistent city casing (`Warszawa`/`WARSZAWA`), win counts and values, 2024–present | Regional PL01 company code | **Use.** Exclude `[Osoba fizyczna]` rows (anonymized private individuals) |
+| [ProZorro](https://www.kaggle.com/datasets/oleksastepaniuk/prozorro-public-procurement-dataset) | CC0 | `Suppliers.csv` (1.7 GB), `Competitive_procurements.csv` (1.1 GB), 2015–2019. Not profiled yet | Regional UA01 company code (Cyrillic) | **Use a sample.** Exclude sole proprietors (ФОП), who are private individuals |
+| [CUAD](https://www.atticusprojectai.org/cuad) | CC BY 4.0 | The Kaggle entry holds **only a README**. 510 contracts + 13k expert labels are on the Atticus/Zenodo source | Document layer, extraction scoring | **Use, from the original source** |
+| [World Bank Corporate Procurement Contract Awards](https://www.kaggle.com/datasets/theworldbank/corporate-procurement-contract-awards) | CC0 | One 0.5 MB CSV, a **stale 2021 snapshot** | Real indirect spend, international vendors | **Use, from the live World Bank Finances API**, not Kaggle |
+| [Company Documents Dataset](https://www.kaggle.com/datasets/ayoubcherguelaine/company-documents-dataset) | Apache-2.0 | Northwind-based PDFs (invoices, POs, shipping orders, stock reports) | Invoice/PO PDFs | **Use** |
+| [Procurement Invoice Fraud Dataset](https://www.kaggle.com/datasets/tokelomashile2/procurement-invoice-fraud-dataset) | Apache-2.0 | Parquet tables, behavioural features, rule-explained fraud labels, invoice PNGs | Invoice-anomaly risk signal; images for the multimodal model | **Use** (stretch) |
+| [Supply Chain Datasets](https://www.kaggle.com/datasets/ayodejiibrahimlateef/supply-chain-datasets) | CC BY 4.0 | Supplier master, 200 KB of procurement orders, data dictionary | Seed for the Coupa mock | **Optional** |
+| [Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) | CC BY-NC-SA 4.0 | 100k orders with promised vs. actual delivery dates | Delivery-delay distributions only (no rows republished) | **Use for calibration** |
+
+Attribution for every dataset goes in the README.
 
 ## Synthetic data and injected defects
 
