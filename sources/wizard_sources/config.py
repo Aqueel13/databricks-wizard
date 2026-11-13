@@ -43,6 +43,12 @@ PL_PO_SHARE = 0.08         # share of NL01 POs cloned into PL01
 UA_PO_SHARE = 0.05         # share of NL01 POs cloned into UA01
 N_DRIFT_SUPPLIERS = 12     # direct suppliers whose delivery performance degrades
 DRIFT_WINDOW_DAYS = 270
+# Drift strength: share of goods receipts delayed rises linearly to DRIFT_MAX_SHARE across the window; each is
+# DRIFT_DELAY_MIN..DRIFT_DELAY_MIN+DRIFT_DELAY_SPAN-1 days late. (v1 used 60% / 3-15 days, which real-data
+# noise made statistically undetectable; see M5 notes.)
+DRIFT_MAX_SHARE = 85
+DRIFT_DELAY_MIN = 7
+DRIFT_DELAY_SPAN = 19
 
 FX_FROM_EUR = {"EUR": 1.0, "USD": 1.08, "PLN": 4.30, "UAH": 45.0}
 

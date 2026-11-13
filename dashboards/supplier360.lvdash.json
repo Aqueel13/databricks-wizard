@@ -1,0 +1,700 @@
+{
+ "datasets": [
+  {
+   "name": "kpis",
+   "displayName": "Headline KPIs",
+   "queryLines": [
+    "SELECT\n  (SELECT count(*) FROM wizard.gold.supplier_360) AS suppliers,\n  (SELECT count(*) FROM wizard.gold.supplier_360 WHERE risk_band = 'high') AS high_risk,\n  (SELECT count(*) FROM wizard.gold.supplier_delivery_trend WHERE deteriorating) AS deteriorating,\n  (SELECT count(*) FROM wizard.gold.supplier_dq_scorecard WHERE has_issues) AS dq_issues,\n  (SELECT round(sum(spend_usd_12m) / 1e6, 1) FROM wizard.gold.spend_concentration) AS spend_12m_musd"
+   ]
+  },
+  {
+   "name": "concentration",
+   "displayName": "Spend concentration (12 months)",
+   "queryLines": [
+    "SELECT category_name, spend_type, round(spend_usd_12m / 1e6, 2) AS spend_musd, suppliers, hhi,\n  round(100 * top1_share, 1) AS top1_pct, round(100 * top3_share, 1) AS top3_pct, concentration\nFROM wizard.gold.spend_concentration"
+   ]
+  },
+  {
+   "name": "ontime",
+   "displayName": "On-time delivery by month",
+   "queryLines": [
+    "SELECT date_trunc('MONTH', received_date) AS month, round(100 * avg(CAST(on_time AS INT)), 1) AS on_time_pct,\n  round(avg(greatest(days_late, 0)), 1) AS avg_days_late, count(*) AS receipts\nFROM wizard.gold.fact_delivery WHERE received_date >= add_months(current_date(), -36) GROUP BY 1"
+   ]
+  },
+  {
+   "name": "deteriorating",
+   "displayName": "Deteriorating suppliers",
+   "queryLines": [
+    "SELECT s.legal_name, s.country, round(100 * t.on_time_baseline, 1) AS on_time_before_pct,\n  round(100 * t.on_time_recent, 1) AS on_time_recent_pct, t.excess_days_late_increase AS extra_days_late, t.z_score, t.n_recent AS recent_receipts\nFROM wizard.gold.supplier_delivery_trend t JOIN wizard.gold.supplier_360 s USING (supplier_id) WHERE t.deteriorating"
+   ]
+  },
+  {
+   "name": "risk",
+   "displayName": "Risk watchlist",
+   "queryLines": [
+    "SELECT legal_name, country, main_category, risk_band, risk_score, delivery_risk, compliance_risk,\n  concentration_risk, data_quality_risk, array_join(risk_drivers, '; ') AS drivers\nFROM wizard.gold.supplier_360 WHERE risk_band IN ('high', 'medium')"
+   ]
+  },
+  {
+   "name": "dq",
+   "displayName": "Master data issues",
+   "queryLines": [
+    "SELECT issue, count(*) AS suppliers FROM wizard.gold.supplier_dq_scorecard LATERAL VIEW explode(issues) i AS issue GROUP BY issue"
+   ]
+  }
+ ],
+ "pages": [
+  {
+   "name": "overview",
+   "displayName": "Overview",
+   "layout": [
+    {
+     "widget": {
+      "name": "c_suppliers",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "kpis",
+         "fields": [
+          {
+           "name": "suppliers",
+           "expression": "`suppliers`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "suppliers",
+         "displayName": "Resolved suppliers"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Resolved suppliers"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 2
+     }
+    },
+    {
+     "widget": {
+      "name": "c_spend",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "kpis",
+         "fields": [
+          {
+           "name": "spend_12m_musd",
+           "expression": "`spend_12m_musd`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "spend_12m_musd",
+         "displayName": "Spend, last 12 months ($M)"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Spend, last 12 months ($M)"
+       }
+      }
+     },
+     "position": {
+      "x": 1,
+      "y": 0,
+      "width": 1,
+      "height": 2
+     }
+    },
+    {
+     "widget": {
+      "name": "c_high",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "kpis",
+         "fields": [
+          {
+           "name": "high_risk",
+           "expression": "`high_risk`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "high_risk",
+         "displayName": "High-risk suppliers"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "High-risk suppliers"
+       }
+      }
+     },
+     "position": {
+      "x": 2,
+      "y": 0,
+      "width": 1,
+      "height": 2
+     }
+    },
+    {
+     "widget": {
+      "name": "c_det",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "kpis",
+         "fields": [
+          {
+           "name": "deteriorating",
+           "expression": "`deteriorating`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "deteriorating",
+         "displayName": "Deteriorating suppliers"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Deteriorating suppliers"
+       }
+      }
+     },
+     "position": {
+      "x": 3,
+      "y": 0,
+      "width": 1,
+      "height": 2
+     }
+    },
+    {
+     "widget": {
+      "name": "c_dq",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "kpis",
+         "fields": [
+          {
+           "name": "dq_issues",
+           "expression": "`dq_issues`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "dq_issues",
+         "displayName": "Suppliers with data issues"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Suppliers with data issues"
+       }
+      }
+     },
+     "position": {
+      "x": 4,
+      "y": 0,
+      "width": 1,
+      "height": 2
+     }
+    },
+    {
+     "widget": {
+      "name": "b_spend",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "concentration",
+         "fields": [
+          {
+           "name": "category_name",
+           "expression": "`category_name`"
+          },
+          {
+           "name": "sum(spend_musd)",
+           "expression": "SUM(`spend_musd`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "encodings": {
+        "x": {
+         "fieldName": "category_name",
+         "scale": {
+          "type": "categorical"
+         },
+         "displayName": "Category"
+        },
+        "y": {
+         "fieldName": "sum(spend_musd)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "displayName": "Spend ($M)"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Spend by category, last 12 months ($M)"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 2,
+      "width": 3,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "t_conc",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "concentration",
+         "fields": [
+          {
+           "name": "category_name",
+           "expression": "`category_name`"
+          },
+          {
+           "name": "hhi",
+           "expression": "`hhi`"
+          },
+          {
+           "name": "top1_pct",
+           "expression": "`top1_pct`"
+          },
+          {
+           "name": "top3_pct",
+           "expression": "`top3_pct`"
+          },
+          {
+           "name": "suppliers",
+           "expression": "`suppliers`"
+          },
+          {
+           "name": "concentration",
+           "expression": "`concentration`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 1,
+       "widgetType": "table",
+       "encodings": {
+        "columns": [
+         {
+          "fieldName": "category_name",
+          "displayName": "Category"
+         },
+         {
+          "fieldName": "hhi",
+          "displayName": "HHI"
+         },
+         {
+          "fieldName": "top1_pct",
+          "displayName": "Top supplier %"
+         },
+         {
+          "fieldName": "top3_pct",
+          "displayName": "Top 3 %"
+         },
+         {
+          "fieldName": "suppliers",
+          "displayName": "Suppliers"
+         },
+         {
+          "fieldName": "concentration",
+          "displayName": "Concentration"
+         }
+        ]
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Spend concentration (HHI >= 2,500 = highly concentrated)"
+       }
+      }
+     },
+     "position": {
+      "x": 3,
+      "y": 2,
+      "width": 3,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "l_ontime",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ontime",
+         "fields": [
+          {
+           "name": "month",
+           "expression": "`month`"
+          },
+          {
+           "name": "avg(on_time_pct)",
+           "expression": "AVG(`on_time_pct`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "line",
+       "encodings": {
+        "x": {
+         "fieldName": "month",
+         "scale": {
+          "type": "temporal"
+         },
+         "displayName": "Month"
+        },
+        "y": {
+         "fieldName": "avg(on_time_pct)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "displayName": "On-time %"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "On-time delivery, all suppliers (monthly)"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 8,
+      "width": 6,
+      "height": 5
+     }
+    }
+   ]
+  },
+  {
+   "name": "suppliers",
+   "displayName": "Suppliers",
+   "layout": [
+    {
+     "widget": {
+      "name": "t_det",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "deteriorating",
+         "fields": [
+          {
+           "name": "legal_name",
+           "expression": "`legal_name`"
+          },
+          {
+           "name": "country",
+           "expression": "`country`"
+          },
+          {
+           "name": "on_time_before_pct",
+           "expression": "`on_time_before_pct`"
+          },
+          {
+           "name": "on_time_recent_pct",
+           "expression": "`on_time_recent_pct`"
+          },
+          {
+           "name": "extra_days_late",
+           "expression": "`extra_days_late`"
+          },
+          {
+           "name": "z_score",
+           "expression": "`z_score`"
+          },
+          {
+           "name": "recent_receipts",
+           "expression": "`recent_receipts`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 1,
+       "widgetType": "table",
+       "encodings": {
+        "columns": [
+         {
+          "fieldName": "legal_name",
+          "displayName": "Supplier"
+         },
+         {
+          "fieldName": "country",
+          "displayName": "Country"
+         },
+         {
+          "fieldName": "on_time_before_pct",
+          "displayName": "On-time before %"
+         },
+         {
+          "fieldName": "on_time_recent_pct",
+          "displayName": "On-time last 6m %"
+         },
+         {
+          "fieldName": "extra_days_late",
+          "displayName": "Extra days late"
+         },
+         {
+          "fieldName": "z_score",
+          "displayName": "z"
+         },
+         {
+          "fieldName": "recent_receipts",
+          "displayName": "Recent receipts"
+         }
+        ]
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Deteriorating delivery: last 6 months vs own prior 12, market-adjusted"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 0,
+      "width": 6,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "t_risk",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "risk",
+         "fields": [
+          {
+           "name": "legal_name",
+           "expression": "`legal_name`"
+          },
+          {
+           "name": "country",
+           "expression": "`country`"
+          },
+          {
+           "name": "risk_band",
+           "expression": "`risk_band`"
+          },
+          {
+           "name": "risk_score",
+           "expression": "`risk_score`"
+          },
+          {
+           "name": "delivery_risk",
+           "expression": "`delivery_risk`"
+          },
+          {
+           "name": "compliance_risk",
+           "expression": "`compliance_risk`"
+          },
+          {
+           "name": "concentration_risk",
+           "expression": "`concentration_risk`"
+          },
+          {
+           "name": "data_quality_risk",
+           "expression": "`data_quality_risk`"
+          },
+          {
+           "name": "drivers",
+           "expression": "`drivers`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 1,
+       "widgetType": "table",
+       "encodings": {
+        "columns": [
+         {
+          "fieldName": "legal_name",
+          "displayName": "Supplier"
+         },
+         {
+          "fieldName": "country",
+          "displayName": "Country"
+         },
+         {
+          "fieldName": "risk_band",
+          "displayName": "Band"
+         },
+         {
+          "fieldName": "risk_score",
+          "displayName": "Risk"
+         },
+         {
+          "fieldName": "delivery_risk",
+          "displayName": "Delivery"
+         },
+         {
+          "fieldName": "compliance_risk",
+          "displayName": "Compliance"
+         },
+         {
+          "fieldName": "concentration_risk",
+          "displayName": "Concentration"
+         },
+         {
+          "fieldName": "data_quality_risk",
+          "displayName": "Data quality"
+         },
+         {
+          "fieldName": "drivers",
+          "displayName": "Drivers"
+         }
+        ]
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Risk watchlist (sanctions alerts are name similarities pending review, not findings)"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 6,
+      "width": 6,
+      "height": 8
+     }
+    },
+    {
+     "widget": {
+      "name": "b_dq",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "dq",
+         "fields": [
+          {
+           "name": "issue",
+           "expression": "`issue`"
+          },
+          {
+           "name": "sum(suppliers)",
+           "expression": "SUM(`suppliers`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "encodings": {
+        "x": {
+         "fieldName": "issue",
+         "scale": {
+          "type": "categorical"
+         },
+         "displayName": "Issue"
+        },
+        "y": {
+         "fieldName": "sum(suppliers)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "displayName": "Suppliers"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Master data issues (suppliers affected)"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 14,
+      "width": 6,
+      "height": 6
+     }
+    }
+   ]
+  }
+ ]
+}

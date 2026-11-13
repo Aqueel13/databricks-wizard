@@ -72,6 +72,64 @@ def _n(col: str) -> str:
     return f"try_cast(nullif({col}, '') as double)"
 
 
+def date_shift_days(db: duckdb.DuckDBPyConnection) -> int:
+    """Days added to every SAP date so the newest PO lands on HISTORY_END. One definition for load() and
+    drift_patch(): the newest order date AFTER de-duplicating SAP clients (the raw extract repeats documents
+    across clients with different dates)."""
+    max_bedat = db.sql(f"""
+        select max(try_cast(bedat as date)) from (
+          select * from {_csv('ekko')} qualify row_number() over (partition by ebeln order by mandt desc) = 1)
+        where bukrs in ({', '.join(repr(k) for k in C.SAP_BUKRS_MAP)})""").fetchone()[0]
+    return (C.HISTORY_END - max_bedat).days
+
+
+def drift_sql(b: str, seed: int, end: str) -> str:
+    """Delay rule for drift suppliers' goods receipts (shared by load() and drift_patch(), so both give the
+    same result): the share of delayed receipts rises linearly across the window to DRIFT_MAX_SHARE."""
+    budat0 = _d(f"{b}.budat")
+    return f"""                         and hash({b}.belnr || 'p{seed}') % 100 < {C.DRIFT_MAX_SHARE}.0 * ({budat0} - (date '{end}' - {C.DRIFT_WINDOW_DAYS})) / {C.DRIFT_WINDOW_DAYS}
+                    then {C.DRIFT_DELAY_MIN} + cast(hash({b}.belnr || '{seed}') % {C.DRIFT_DELAY_SPAN} as integer)"""
+
+
+def drift_patch() -> None:
+    """Re-apply delivery drift to an existing SAP mock with the current DRIFT_* settings, in place.
+
+    For every goods receipt of a drift supplier, the original posting date is recomputed from the raw SAP data
+    and the current delay rule applied, exactly as a fresh load() would. Rows are UPDATEd in Postgres, so the
+    change reaches Databricks through CDC like any other change. (The fiscal year key GJAHR is left as is.)"""
+    db = duckdb.connect()
+    db.execute("install postgres; load postgres;")
+    db.execute(f"attach '{C.pg_dsn('erp')}' as pg (type postgres)")
+    seed, end = C.SEED, C.HISTORY_END.isoformat()
+    db.execute(f"create view raw_ekbe as select * from {_csv('ekbe')} "
+               f"qualify row_number() over (partition by ebeln, ebelp, zekkn, vgabe, gjahr, belnr, buzei order by mandt desc) = 1")
+    db.execute(f"set variable shift = {date_shift_days(db)}")
+    db.execute(f"""
+        create table patch as
+        select g.ebeln, g.ebelp, g.zekkn, g.vgabe, g.gjahr, g.belnr, g.buzei, g.budat as old_budat,
+               least({_d('b.budat')} + case when {_d('b.budat')} > date '{end}' - {C.DRIFT_WINDOW_DAYS}
+{drift_sql('b', seed, end)}
+                    else 0 end, date '{end}') as new_budat
+        from pg.sap.ekbe g
+        join pg.sap.ekko k on k.ebeln = g.ebeln
+        join (select d.lifnr from '{C.STAGE / 'sys_sap_direct.parquet'}' d
+              join '{C.STAGE / 'gt_supplier.parquet'}' s using (true_supplier_id) where s.storyline = 'delivery_drift') v
+          on v.lifnr = k.lifnr
+        join raw_ekbe b on b.ebeln = g.ebeln and b.ebelp = g.ebelp and coalesce(b.zekkn, '00') = g.zekkn
+                       and b.vgabe = g.vgabe and b.belnr = g.belnr and coalesce(b.buzei, '0000') = g.buzei
+        where g.vgabe = '1'""")
+    changed = db.sql("select count(*) from patch where new_budat <> old_budat").fetchone()[0]
+    total = db.sql("select count(*) from patch").fetchone()[0]
+    db.execute("""update pg.sap.ekbe set budat = p.new_budat, cpudt = p.new_budat from patch p
+                  where ekbe.ebeln = p.ebeln and ekbe.ebelp = p.ebelp and ekbe.zekkn = p.zekkn and ekbe.vgabe = p.vgabe
+                    and ekbe.gjahr = p.gjahr and ekbe.belnr = p.belnr and ekbe.buzei = p.buzei
+                    and p.new_budat <> p.old_budat""")
+    late = db.sql("""select count(*) from patch p join pg.sap.eket e on e.ebeln = p.ebeln and e.ebelp = p.ebelp
+                     where p.new_budat > e.eindt and p.new_budat > date '2026-10-31' - interval 270 days""").fetchone()[0]
+    print(f"drift-patch: {total} goods receipts of drift suppliers, {changed} updated; "
+          f"{late} late receipts in the drift window now")
+
+
 def load() -> None:
     with psycopg.connect(C.pg_dsn("erp"), autocommit=True) as pg:
         pg.execute(DDL)
@@ -93,8 +151,7 @@ def load() -> None:
                    f"qualify row_number() over (partition by {k} order by mandt desc) = 1")
     db.execute(f"create table ekko0 as select *, case bukrs {bukrs_map} end nb from raw_ekko "
                f"where bukrs in ({', '.join(repr(k) for k in C.SAP_BUKRS_MAP)})")
-    max_bedat = db.sql("select max(try_cast(bedat as date)) from ekko0").fetchone()[0]
-    db.execute(f"set variable shift = {(C.HISTORY_END - max_bedat).days}")
+    db.execute(f"set variable shift = {date_shift_days(db)}")
 
     # vendors receiving direct spend, Pareto weights -> cumulative intervals per company code
     db.execute(f"""
@@ -190,9 +247,7 @@ def load() -> None:
                {_d('b.budat')} budat0,
                case when b.vgabe = '1' and h.new_lifnr in (select lifnr from drift_vendors)
                          and {_d('b.budat')} > date '{end}' - {C.DRIFT_WINDOW_DAYS}
-                         -- share of late receipts rises linearly to 60% across the window; each is 3-15 days late
-                         and hash(b.belnr || 'p{seed}') % 100 < 60.0 * ({_d('b.budat')} - (date '{end}' - {C.DRIFT_WINDOW_DAYS})) / {C.DRIFT_WINDOW_DAYS}
-                    then 3 + cast(hash(b.belnr || '{seed}') % 13 as integer)
+{drift_sql('b', seed, end)}
                     else 0 end delay
         from lines l join raw_ekbe b on b.ebeln = l.src_ebeln and b.ebelp = l.ebelp
         join hdr2 h on h.ebeln = l.ebeln""")

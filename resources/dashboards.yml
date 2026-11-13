@@ -1,0 +1,6 @@
+resources:
+  dashboards:
+    supplier360:
+      display_name: "Supplier 360: Larkspur Foods (Databricks Wizard)"
+      file_path: ../dashboards/supplier360.lvdash.json
+      warehouse_id: ${var.warehouse_id}

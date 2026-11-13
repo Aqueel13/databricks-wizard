@@ -29,6 +29,19 @@ resources:
       configuration:
         wizard.catalog: ${var.catalog}
 
+    wizard_gold:
+      name: wizard-gold
+      catalog: ${var.catalog}
+      schema: gold
+      serverless: true
+      continuous: false
+      channel: CURRENT
+      libraries:
+        - file:
+            path: ../pipelines/gold.sql
+      configuration:
+        catalog: ${var.catalog}
+
   jobs:
     wizard_ingest:
       name: wizard-ingest
@@ -67,3 +80,15 @@ resources:
           spark_python_task:
             python_file: ../er/jobs/run_er.py
             parameters: ["--er-root", "${workspace.file_path}/er"]
+        - task_key: gold
+          depends_on:
+            - task_key: entity_resolution
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.wizard_gold.id}
+        - task_key: semantic_layer
+          depends_on:
+            - task_key: gold
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../pipelines/semantic_layer.sql

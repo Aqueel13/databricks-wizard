@@ -12,6 +12,10 @@ variables:
   catalog:
     description: Unity Catalog catalog that holds every layer
     default: wizard
+  warehouse_id:
+    description: SQL warehouse for SQL tasks, Genie and dashboards
+    lookup:
+      warehouse: Serverless Starter Warehouse
 
 targets:
   dev:

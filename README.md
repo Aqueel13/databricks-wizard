@@ -79,7 +79,9 @@ setup/      workspace capability check
 sources/    simulated SAP, Coupa, HICX and document sources + generator (M1)
 docker/     local stack: Postgres, Redpanda, Debezium, console, Coupa API
 shipper/    landing shipper: local sources -> UC volume, with manifests (M2)
-pipelines/  Lakeflow pipeline code (bronze)
+pipelines/  Lakeflow pipelines (bronze, silver, gold) and the semantic layer (metric views)
+er/         entity resolution package + Databricks job (M4)
+dashboards/ AI/BI dashboard definition (M5)
 resources/  Asset Bundle resources (pipeline, ingest job); bundle root is databricks.yml
 scripts/    data download (`make data` → data/raw, not committed)
 docs/       architecture, data model, roadmap, ADRs

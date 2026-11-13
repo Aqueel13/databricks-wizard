@@ -130,7 +130,11 @@ Extracted fields such as certificate expiry go into gold risk features. So the d
 | Agents | MCP server (Databricks App) | Read-only tools over gold tables and the vector index |
 | WatchDog | MCP client | Gets supplier context during process-intelligence investigations |
 
-KPI definitions (on-time delivery %, spend HHI, risk score) are defined once, as Unity Catalog metric views if Free Edition supports them, otherwise as governed SQL views. Genie, dashboards and MCP all read those definitions.
+KPI definitions are defined once as **Unity Catalog metric views** (supported on Free Edition): `gold.metrics_spend`, `gold.metrics_delivery`, `gold.metrics_supplier` (`pipelines/semantic_layer.sql`, run as the last task of `wizard-ingest`). Genie, the dashboard and (in M7) MCP tools read them. Join aliases avoid `source`, because the fact tables have a `source` column that collides with the metric view's own alias; joins use `using:`.
+
+- **Genie space** "Supplier 360" (`scripts/genie_space.py`, created through the REST API because the pinned SDK has no create call): gold tables + metric views + instructions that pin the business definitions (deterioration, risk bands, alerts ≠ findings, no financial risk).
+- **AI/BI dashboard** as code (`dashboards/supplier360.lvdash.json`, deployed by the bundle): headline KPIs, spend and concentration, market on-time trend, deteriorating suppliers, risk watchlist, master-data issues.
+- **Exit test:** `scripts/m5_genie_eval.py` asks Genie the four core questions, runs its SQL and scores the answers against gold. 4/4 pass.
 
 ### MCP tools
 

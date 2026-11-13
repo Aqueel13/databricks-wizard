@@ -164,10 +164,17 @@ erDiagram
 
 ### KPI definitions
 
+All built in `pipelines/gold.sql`; KPIs exposed through metric views in `pipelines/semantic_layer.sql`.
+
 | KPI | Definition |
 |---|---|
-| On-time delivery % | receipts with `received_date ≤ promised_date` ÷ all receipts in the period |
-| Deterioration | negative slope of `on_time_pct` over the trailing 6 months and below 85% |
-| Spend HHI | Σ(supplier share of category spend × 100)², 0–10,000 |
-| Risk score | Weighted sum of sub-scores (weights in `ops.risk_weights`, versioned) |
-| DQ completeness | Required fields filled ÷ required fields |
+| On-time delivery | first goods receipt on or before the promised date (SAP `EKET.EINDT`, Coupa need-by date) |
+| **Deteriorating supplier** | last 6 months vs the supplier's **own** prior 12 months, **market-adjusted** (each receipt's lateness minus that month's average across all suppliers): on-time rate down ≥ 10 points **and** lateness up ≥ 5 days with one-sided z ≥ 1.64, on ≥ 5 recent and ≥ 8 baseline receipts. Fixed thresholds (e.g. "below 85%") are meaningless here: the market on-time rate is ~60% and swings 31–77% month to month |
+| Spend HHI | Σ(supplier share of category spend × 100)² over the last 12 months, 0–10,000; ≥ 2,500 highly, 1,500–2,500 moderately concentrated |
+| Risk score | 30% delivery + 30% compliance + 20% concentration + 20% data quality (0–100). Delivery uses evidence only with ≥ 5 recent receipts. Compliance: confirmed sanctions match 100, expired certificate while approved 60, **open sanctions alert (name similarity pending review) 50**, purchasing block 40. Bands: high ≥ 30 (two significant factors), medium ≥ 15 (one). No financial component (no financial source loaded) |
+| DQ score | mean of completeness, validity, consistency (0–100) minus 10 per duplicate record. `issues` lists every problem behind the scores; `has_issues = size(issues) > 0` |
+
+### How the KPIs were validated
+
+- **Deterioration vs the planted storyline.** v1 drift (60% of receipts, 3–15 days late) was below what any test could detect against real-data noise (best: 4 found, 25 false alarms). It was replaced with a realistic drift (up to 85% of receipts, 7–25 days late) by `wizard-sources drift-patch`. The patch recomputes the receipts deterministically from the raw data, applies them as UPDATEs and flows them through CDC. The final rule finds **6 of the 8 SAP drift suppliers with enough deliveries**; the 4 fictional Coupa ones have 1–13 deliveries in total and are undetectable by volume. It also flags 12 suppliers whose deterioration is real in the **unmodified SAP history** (on-time 69% → 37%, +9 days vs market), so precision against the answer key is a lower bound. Tuning query: `scripts/sql/m5_drift_eval.sql`.
+- **Business questions via Genie** (`scripts/m5_genie_eval.py`, results in `ops.genie_eval`): deteriorating suppliers 18/18, compliance risk 190/190 (precision 0.96), spend concentration 6/6, master data issues 1,955/1,955.
