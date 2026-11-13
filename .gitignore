@@ -9,3 +9,4 @@ __pycache__/
 *.sqlite
 data/
 landing_out/
+sources/.venv/

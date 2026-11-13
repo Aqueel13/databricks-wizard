@@ -5,7 +5,7 @@ Each milestone ends with something that can be demonstrated. Exit criteria are p
 | # | Milestone | Scope | Exit criteria |
 |---|---|---|---|
 | M0 | Platform check | Free Edition workspace, capability notebook, docs | ✅ All capability checks pass (2026-11-13) |
-| M1 | Sources & data | Docker Compose: Postgres (SAP schema), Debezium, Redpanda, Coupa mock API, HICX export job, PDF generator. Synthetic generator with injected defects and ground truth. Public-data snapshots. | `docker compose up` produces CDC events, API pages, exports and PDFs; ground-truth tables exist |
+| M1 ✅ | Sources & data | Docker Compose: Postgres (SAP schema), Debezium, Redpanda, Coupa mock API, HICX export job, PDF generator. Synthetic generator with injected defects and ground truth. Public-data snapshots. | `docker compose up` produces CDC events, API pages, exports and PDFs; ground-truth tables exist |
 | M2 | Landing & bronze | Shipper uploads to the UC Volume with manifests. Lakeflow pipeline with Auto Loader bronze tables. | A change in Postgres reaches a bronze table without manual steps; manifest reconciliation passes |
 | M3 | Silver & DQ | `AUTO CDC` (SCD1/SCD2), canonical supplier model, expectations, quarantine, DQ scorecard | Late and out-of-order CDC handled correctly; every injected DQ defect appears in quarantine or the scorecard |
 | M4 | Entity resolution | Multilingual normalization (transliteration, legal forms, national-ID checks), blocking, Splink, embeddings, LLM adjudication, review queue, survivorship, `dim_supplier` | F1 ≥ 0.95 overall and ≥ 0.85 on Cyrillic–Latin pairs; every link has evidence |

@@ -75,6 +75,14 @@ kaggle_all   supply_chain     ayodejiibrahimlateef/supply-chain-datasets        
 kaggle_all   olist            olistbr/brazilian-ecommerce                          # CC BY-NC-SA 4.0
 url          cuad https://zenodo.org/records/4595826/files/CUAD_v1.zip CUAD_v1.zip  # CC BY 4.0
 
+# --- OFAC SDN list + aliases (US public domain)
+if [[ ! -f "$RAW/ofac/.done" ]]; then
+  mkdir -p "$RAW/ofac"; log "ofac: sdn.csv, alt.csv"
+  curl -fsSL -o "$RAW/ofac/sdn.csv" https://www.treasury.gov/ofac/downloads/sdn.csv
+  curl -fsSL -o "$RAW/ofac/alt.csv" https://www.treasury.gov/ofac/downloads/alt.csv
+  touch "$RAW/ofac/.done"
+else log "skip ofac (done)"; fi
+
 # --- Manifest
 log "writing manifest"
 ( cd "$RAW" && find . -type f ! -name '.done' ! -name 'MANIFEST.tsv' -printf '%P\t%s\n' | sort > MANIFEST.tsv )

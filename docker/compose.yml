@@ -1,0 +1,96 @@
+# Databricks Wizard — simulated enterprise source systems (local only, ₹0).
+#   postgres   SAP mock (db `erp`, schema `sap`) + Coupa mock backing store (db `coupa`)
+#   redpanda   Kafka-compatible broker for CDC events
+#   connect    Debezium Kafka Connect; captures `erp.sap.*` changes
+#   console    Redpanda Console UI  -> http://localhost:8080
+#   coupa-api  Coupa-style REST API -> http://localhost:8081/docs
+name: wizard
+
+services:
+  postgres:
+    image: postgres:16.4
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=4", "-c", "max_wal_senders=4"]
+    environment:
+      POSTGRES_USER: wizard
+      POSTGRES_PASSWORD: wizard
+      POSTGRES_DB: erp
+    ports: ["5433:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wizard -d erp"]
+      interval: 5s
+      retries: 20
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 1G
+      - --overprovisioned
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports: ["19092:19092"]
+    volumes: [redpanda:/var/lib/redpanda/data]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 5s
+      retries: 30
+
+  connect:
+    image: quay.io/debezium/connect:2.7.3.Final
+    depends_on:
+      redpanda: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+    environment:
+      BOOTSTRAP_SERVERS: redpanda:9092
+      GROUP_ID: wizard-connect
+      CONFIG_STORAGE_TOPIC: _connect_configs
+      OFFSET_STORAGE_TOPIC: _connect_offsets
+      STATUS_STORAGE_TOPIC: _connect_status
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+    ports: ["8083:8083"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs localhost:8083/connectors"]
+      interval: 5s
+      retries: 40
+    profiles: [cdc]
+
+  connect-init:
+    image: curlimages/curl:8.10.1
+    depends_on:
+      connect: {condition: service_healthy}
+    volumes: [./debezium/sap-connector.json:/sap-connector.json:ro]
+    entrypoint: ["sh", "-c", "curl -fsS -X PUT -H 'Content-Type: application/json' --data @/sap-connector.json http://connect:8083/connectors/sap-cdc/config && echo registered"]
+    restart: "no"
+    profiles: [cdc]
+
+  console:
+    image: docker.redpanda.com/redpandadata/console:v2.7.2
+    depends_on:
+      redpanda: {condition: service_healthy}
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      CONNECT_ENABLED: "true"
+      CONNECT_CLUSTERS_NAME: debezium
+      CONNECT_CLUSTERS_URL: http://connect:8083
+    ports: ["8080:8080"]
+
+  coupa-api:
+    build: ../sources
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+    ports: ["8081:8081"]
+    command: ["wizard-sources", "api", "--port", "8081"]
+    profiles: [api]
+
+volumes:
+  pgdata:
+  redpanda:

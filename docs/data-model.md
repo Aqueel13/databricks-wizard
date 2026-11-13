@@ -2,6 +2,8 @@
 
 All tables live in the `wizard` catalog. Bronze and silver keep source-system names and keys. Gold is keyed on the resolved `supplier_id`.
 
+**The enterprise:** *Larkspur Foods*, a fictional food manufacturer. Direct spend (food ingredients) runs through SAP company codes US01 (USD), NL01 (EUR), PL01 (PLN) and UA01 (UAH). Indirect spend (IT services, MRO, logistics, professional services, facilities) runs through Coupa. How the sources are built and run: [sources/README.md](../sources/README.md).
+
 ## Sources
 
 | Source | Simulates | Entities | Delivery mode |
@@ -50,18 +52,18 @@ Checked via the Kaggle API on 2026-11-13 (licence from dataset metadata; content
 | [Amazon ML Challenge 2026 mirror](https://www.kaggle.com/datasets/satwiksps/amazon-ml-challenge-2026) | MIT (as stated by the mirror) | 3 sources (`entity_id`, `business_name`, `business_address`, `country`) plus ground truth. **Profiled:** 2.2M source-1 records, **US 60% / India 40%**, avg 3.5 matches per record, 123k with no match | External benchmark for the matcher | **Use a 50k sample** for internal benchmarking only; never republish. Records are small businesses, not suppliers, so the benchmark tests the matcher rather than the domain |
 | [Polish public tenders](https://www.kaggle.com/datasets/michalpozoga/polish-public-tenders) | CC BY 4.0 | **Profiled:** 81,674 contractors with real **NIP**, names with diacritics and legal forms (`Sp. z o.o.`, `SPÓŁKA JAWNA`), inconsistent city casing (`Warszawa`/`WARSZAWA`), win counts and values, 2024–present | Regional PL01 company code | **Use.** Exclude `[Osoba fizyczna]` rows (anonymized private individuals) |
 | [ProZorro](https://www.kaggle.com/datasets/oleksastepaniuk/prozorro-public-procurement-dataset) | CC0 | `Suppliers.csv` (1.7 GB), `Competitive_procurements.csv` (1.1 GB), 2015–2019. Not profiled yet | Regional UA01 company code (Cyrillic) | **Use a sample.** Exclude sole proprietors (ФОП), who are private individuals |
-| [CUAD](https://www.atticusprojectai.org/cuad) | CC BY 4.0 | The Kaggle entry holds **only a README**. 510 contracts + 13k expert labels are on the Atticus/Zenodo source | Document layer, extraction scoring | **Use, from the original source** |
+| [CUAD](https://www.atticusprojectai.org/cuad) | CC BY 4.0 | The Kaggle entry holds **only a README**. 510 contracts + 13k expert labels are on the Atticus/Zenodo source | Document layer, extraction scoring | **Use, from the original source**, as an extraction benchmark corpus. Supplier contracts are generated from a template so parties match the supplier master |
 | [World Bank Corporate Procurement Contract Awards](https://www.kaggle.com/datasets/theworldbank/corporate-procurement-contract-awards) | CC0 | One 0.5 MB CSV, a **stale 2021 snapshot** | Real indirect spend, international vendors | **Use the Kaggle snapshot for now.** The old Socrata API now redirects to the new "Finances One" portal; switching to live data is a later task |
 | [Company Documents Dataset](https://www.kaggle.com/datasets/ayoubcherguelaine/company-documents-dataset) | Apache-2.0 | Northwind-based PDFs (invoices, POs, shipping orders, stock reports) | Invoice/PO PDFs | **Use** |
 | [Procurement Invoice Fraud Dataset](https://www.kaggle.com/datasets/tokelomashile2/procurement-invoice-fraud-dataset) | Apache-2.0 | Parquet tables, behavioural features, rule-explained fraud labels, invoice PNGs | Invoice-anomaly risk signal; images for the multimodal model | **Use** (stretch) |
 | [Supply Chain Datasets](https://www.kaggle.com/datasets/ayodejiibrahimlateef/supply-chain-datasets) | CC BY 4.0 | Supplier master, 200 KB of procurement orders, data dictionary | Seed for the Coupa mock | **Optional** |
-| [Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) | CC BY-NC-SA 4.0 | 100k orders with promised vs. actual delivery dates | Delivery-delay distributions only (no rows republished) | **Use for calibration** |
+| [Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) | CC BY-NC-SA 4.0 | 100k orders with promised vs. actual delivery dates | Delivery-delay distributions only (no rows republished) | **Not used.** Real goods-receipt lateness from the SAP data replaced it |
 
 Attribution for every dataset goes in the README.
 
 ## Synthetic data and injected defects
 
-The generator (`sources/generator/`) produces about 2,000 suppliers, 3 years of POs, deliveries and invoices, and roughly 500 documents. Part of the supplier base is seeded from real USAspending recipients, so names and addresses look real.
+The generator (`sources/wizard_sources/`) produces about 3,200 real-world suppliers (5,600+ source records), 73k SAP POs over 4 years, 22k Coupa POs over 3 years, and about 970 documents. Supplier identities come from the SAP demo vendor master, World Bank awardees, Polish tenders and ProZorro. USAspending, GLEIF and SEC enrichment are planned for later milestones.
 
 Defects are injected on purpose and **recorded in a ground-truth table**, so data-quality and entity-resolution results can be scored:
 
