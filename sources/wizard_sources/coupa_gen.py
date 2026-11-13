@@ -88,7 +88,8 @@ def load() -> None:
         select c.*, g.true_supplier_id, g.storyline, g.origin
         from '{C.STAGE / 'sys_coupa_supplier.parquet'}' c
         join '{C.STAGE / 'gt_source_record.parquet'}' r on r.source_system = 'coupa' and r.source_id = cast(c.id as varchar)
-        join '{C.STAGE / 'gt_supplier.parquet'}' g using (true_supplier_id)""")
+        join '{C.STAGE / 'gt_supplier.parquet'}' g using (true_supplier_id)
+        order by c.id""")
     sup = [dict(zip(rel.columns, r)) for r in rel.fetchall()]
 
     suppliers, pos, lines, receipts, invoices, contracts, defects = [], [], [], [], [], [], []
@@ -207,7 +208,7 @@ def load() -> None:
     # append invoice defects to ground truth
     gt = C.STAGE / "gt_defect.parquet"
     # idempotent re-runs: drop only the defects this step creates
-    rel = db.sql(f"select * from '{gt}' where defect_type not in ('invoice_amount_mismatch', 'duplicate_invoice', 'schema_drift')")
+    rel = db.sql(f"select * from '{gt}' where defect_type not in ('invoice_amount_mismatch', 'duplicate_invoice', 'schema_drift') order by defect_id")
     existing = [dict(zip(rel.columns, r)) for r in rel.fetchall()]
     n = len(existing)
     for i, (kind, key, orig, new) in enumerate(defects, start=1):

@@ -33,7 +33,7 @@ def export() -> None:
     rel = db.sql(f"select * from '{C.STAGE / 'sys_hicx_supplier.parquet'}' order by hicx_id")
     rows = [dict(zip(rel.columns, r)) for r in rel.fetchall()]
     gt = C.STAGE / "gt_defect.parquet"
-    rel = db.sql(f"select * from '{gt}' where defect_type not in ('expired_certificate')")
+    rel = db.sql(f"select * from '{gt}' where defect_type not in ('expired_certificate') order by defect_id")
     defects = [dict(zip(rel.columns, r)) for r in rel.fetchall()]
     next_d = len(defects) + 1
 

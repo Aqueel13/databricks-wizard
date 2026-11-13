@@ -199,8 +199,8 @@ def load() -> None:
     ins.append("""insert into pg.sap.t001 values
         """ + ",".join(f"('{k}', '{v[0].replace(chr(39), chr(39) * 2)}', '{v[3]}', '{v[1]}', '{v[2]}')"
                        for k, v in C.COMPANY_CODES.items()))
-    ins.append("insert into pg.sap.t023t select matkl, any_value(wgbez) from raw_t023t where spras = 'E' and matkl is not null group by 1")
-    ins.append("""insert into pg.sap.tcurr select kurst, fcurr, tcurr, gdatu, any_value(try_cast(ukurs as double))
+    ins.append("insert into pg.sap.t023t select matkl, min(wgbez) from raw_t023t where spras = 'E' and matkl is not null group by 1")
+    ins.append("""insert into pg.sap.tcurr select kurst, fcurr, tcurr, gdatu, min(try_cast(ukurs as double))
                   from raw_tcurr where kurst is not null and gdatu is not null group by all""")
     ins.append(f"""insert into pg.sap.lfa1
         select lifnr, name1, name2, land1, ort01, pstlz, regio, stras, nullif(stcd1, ''), nullif(stcd2, ''),
@@ -268,8 +268,8 @@ def load() -> None:
         from raw_rseg r join lines l on l.src_ebeln = r.ebeln and l.ebelp = r.ebelp""")
     db.execute(f"""
         create table inv as
-        select r.pfx, r.belnr, r.gjahr, any_value(r.new_bukrs) bukrs, any_value(r.new_waers) waers,
-               any_value(h.new_lifnr) lifnr,
+        select r.pfx, r.belnr, r.gjahr, min(r.new_bukrs) bukrs, min(r.new_waers) waers,
+               min(h.new_lifnr) lifnr,
                sum({_n('r.wrbtr')} * r.f * r.fxf) / nullif(sum({_n('r.wrbtr')}), 0) ratio
         from rseg1 r join hdr2 h on h.ebeln = r.new_ebeln group by 1, 2, 3""")
     ins.append(f"""insert into pg.sap.rbkp

@@ -82,7 +82,7 @@ def generate() -> None:
     if root.exists():  # regenerate from scratch so stale documents never linger
         shutil.rmtree(root)
     gt = C.STAGE / "gt_defect.parquet"
-    rel = db.sql(f"select * from '{gt}' where defect_type not in ('certificate_metadata_mismatch', 'contract_metadata_mismatch')")
+    rel = db.sql(f"select * from '{gt}' where defect_type not in ('certificate_metadata_mismatch', 'contract_metadata_mismatch') order by defect_id")
     defects = [dict(zip(rel.columns, r)) for r in rel.fetchall()]
     nd = len(defects) + 1
     docs = []
@@ -117,7 +117,8 @@ def generate() -> None:
     with psycopg.connect(C.pg_dsn("coupa")) as pg:
         contracts = pg.execute("""select k.number, k.name, k.start_date, k.end_date, k.value, k.currency,
                                          s.number, s.name, s.country
-                                  from contracts k join suppliers s on s.id = k.supplier_id""").fetchall()
+                                  from contracts k join suppliers s on s.id = k.supplier_id
+                                  order by k.number""").fetchall()
     for num, cname, start, end, value, cur, snum, sname, country in contracts:
         value = float(value)
         doc_value = value

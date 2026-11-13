@@ -11,8 +11,9 @@ STAGE = ROOT / "data" / "stage"          # generator outputs (parquet), incl. gr
 EXPORTS = ROOT / "data" / "exports"      # file-based sources (HICX exports, documents)
 
 SEED = int(os.environ.get("WIZARD_SEED", "42"))
-# Opt-in generator improvements that change the random sequence (off = reproduce the current data exactly)
-EIN_FORMAT_DEFECTS = os.environ.get("WIZARD_EIN_FORMAT_DEFECTS", "0") == "1"
+# EIN defects keep the NN-NNNNNNN format (only the digits are wrong), so they are realistic typos rather than
+# malformed strings. v1 data was built with this off; set WIZARD_EIN_FORMAT_DEFECTS=0 to get the v1 behaviour.
+EIN_FORMAT_DEFECTS = os.environ.get("WIZARD_EIN_FORMAT_DEFECTS", "1") == "1"
 
 # Fictional enterprise
 ENTERPRISE = "Larkspur Foods"

@@ -40,6 +40,13 @@ def stable_hash(s: str) -> int:
     return int(hashlib.sha1(s.encode()).hexdigest()[:12], 16)
 
 
+def mode_cte(src: str, key: str, col: str, alias: str) -> str:
+    """Deterministic mode: the most frequent non-null value of col per key, ties broken by the value itself.
+    DuckDB's mode()/any_value() pick arbitrarily among ties, which made v1 builds differ run to run."""
+    return (f"(select {key}, first(v order by n desc, v) as {alias} from "
+            f"(select {key}, {col} as v, count(*) n from {src} where {col} is not null group by all) group by 1)")
+
+
 def wb_category(c: str | None) -> str:
     c = (c or "").upper()
     if any(k in c for k in ("SOFTWARE", "IT ", "IT HARD", "CLOUD", "TELECOM")) or c == "IT SERVICES":
@@ -117,7 +124,8 @@ class Builder:
         rows = self.db.sql(f"""
             select lifnr, name1, name2, land1, ort01, pstlz, stras, loevm
             from {SAP_CSV.format(f=C.RAW / 'sap/lfa1.csv')}
-            qualify row_number() over (partition by lifnr order by mandt desc) = 1""").fetchall()
+            qualify row_number() over (partition by lifnr order by mandt desc) = 1
+            order by lifnr""").fetchall()
         self._taken = {r[0] for r in rows}
         clusters: dict[str, list] = {}
         for r in rows:
@@ -146,11 +154,15 @@ class Builder:
 
     # ------------------------------------------------------------ 2-5. external suppliers
     def worldbank(self) -> list[dict]:
+        src = f"read_csv('{C.RAW / 'worldbank_awards/corporate-procurement-contract-awards.csv'}', header=true)"
         rows = self.db.sql(f"""
-            select Supplier, any_value("Supplier Country Code") cc, mode("Commodity Category") cat
-            from read_csv('{C.RAW / 'worldbank_awards/corporate-procurement-contract-awards.csv'}', header=true)
-            where Supplier is not null group by 1
-            order by hash(Supplier || '{C.SEED}') limit {C.N_WORLDBANK}""").fetchall()
+            with r as (select Supplier, "Supplier Country Code" cc, "Commodity Category" cat from {src}
+                       where Supplier is not null)
+            select s.Supplier, cc.cc, cat.cat
+            from (select distinct Supplier from r) s
+            left join {mode_cte('r', 'Supplier', 'cc', 'cc')} cc using (Supplier)
+            left join {mode_cte('r', 'Supplier', 'cat', 'cat')} cat using (Supplier)
+            order by hash(s.Supplier || '{C.SEED}'), s.Supplier limit {C.N_WORLDBANK}""").fetchall()
         out = []
         for i, (name, cc, cat) in enumerate(rows):
             out.append(dict(true_supplier_id=f"TS-WB-{i:05d}", canonical_name=name.strip(), country=cc or "US",
@@ -166,14 +178,19 @@ class Builder:
               select contractor_national_id nip, substr(cpv_code, 1, 2) cpv2
               from read_parquet(['{C.RAW / 'pl_tenders/tenders_2024.parquet'}', '{C.RAW / 'pl_tenders/tenders_2025.parquet'}'])
               where contractor_national_id is not null and contractor_name <> '[Osoba fizyczna]'),
-            cat as (select nip, mode(case cpv2 {cat_case} end) category from t group by 1)
+            tc as (select nip, case cpv2 {cat_case} end category from t),
+            cat as {mode_cte('tc', 'nip', 'category', 'category')}
             select c.nip, c.name, c.city, cat.category
             from read_parquet('{C.RAW / 'pl_tenders/contractors.parquet'}') c join cat using (nip)
             where c.name <> '[Osoba fizyczna]' and c.nip not like 'anon%' and cat.category is not null
-            order by hash(c.nip || '{C.SEED}')""").fetchall()
+            order by hash(c.nip || '{C.SEED}'), c.nip, c.name, c.city""").fetchall()
         # companies only: sole traders (jednoosobowa działalność) are private individuals
         company = re.compile(r"sp\.? ?z ?o\.? ?o|spółka|s\.a\.|\bsa\b|sp\. ?[jk]\.|spółdzielnia|przedsiębiorstwo państwowe", re.I)
-        rows = [r for r in rows if T.nip_valid(r[0]) and company.search(r[1] or '')]
+        # civil partnerships (spółka cywilna, "s.c.") are agreements between natural persons, usually named after them
+        civil = re.compile(r"sp[óo][łl]ka cywilna|\bs\. ?c\.?(?=\s|$|,)", re.I)
+        rows = [r for r in rows if T.nip_valid(r[0]) and company.search(r[1] or '') and not civil.search(r[1] or '')]
+        seen_nip: set[str] = set()
+        rows = [r for r in rows if not (r[0] in seen_nip or seen_nip.add(r[0]))]   # one row per NIP
         food = [r for r in rows if r[3] == "DIRECT_INGREDIENTS"][: int(C.N_POLAND * 0.4)]
         other = [r for r in rows if r[3] != "DIRECT_INGREDIENTS"][: C.N_POLAND - len(food)]
         return [dict(true_supplier_id=f"TS-PL-{nip}", canonical_name=name.strip(), country="PL", origin="pl_tenders",
@@ -188,11 +205,15 @@ class Builder:
               select supplier_code code, supplier_name sname, supplier_region region, substr(lot_cpv, 1, 2) cpv2
               from read_csv('{C.RAW / 'prozorro/Suppliers.csv'}', header=true, all_varchar=true)
               where length(supplier_code) = 8),
-            g as (select code, mode(sname) sname, mode(region) region, mode(case cpv2 {cat_case} end) category,
-                         count(*) wins from s group by 1)
+            sc as (select code, sname, region, case cpv2 {cat_case} end category from s),
+            g as (select w.code, n.sname, r.region, c.category, w.wins
+                  from (select code, count(*) wins from s group by 1) w
+                  left join {mode_cte('sc', 'code', 'sname', 'sname')} n using (code)
+                  left join {mode_cte('sc', 'code', 'region', 'region')} r using (code)
+                  left join {mode_cte('sc', 'code', 'category', 'category')} c using (code))
             select code, sname, region, category from g
             where category is not null and wins >= 3
-            order by hash(code || '{C.SEED}')""").fetchall()
+            order by hash(code || '{C.SEED}'), code""").fetchall()
         rows = [r for r in rows if T.edrpou_valid(r[0]) and T.has_cyrillic(r[1] or "")]
         food = [r for r in rows if r[3] == "DIRECT_INGREDIENTS"][: int(C.N_UKRAINE * 0.4)]
         other = [r for r in rows if r[3] != "DIRECT_INGREDIENTS"][: C.N_UKRAINE - len(food)]
@@ -237,7 +258,7 @@ class Builder:
         rows = self.db.sql(f"""
             select column01 from read_csv('{f}', header=false, all_varchar=true, quote='"', null_padding=true)
             where column02 = '-0- ' or column02 = '-0-'
-            order by hash(column01 || '{C.SEED}') limit 50""").fetchall()
+            order by hash(column01 || '{C.SEED}'), column01 limit 50""").fetchall()
         return [r[0].strip() for r in rows if r[0] and 8 < len(r[0]) < 40][:6]
 
     # ------------------------------------------------------------ placement
@@ -415,7 +436,8 @@ def refine_sap_identity() -> None:
     db = duckdb.connect()
     rows = db.sql(f"""
         select lifnr, name1, name2, land1, ort01 from {SAP_CSV.format(f=C.RAW / 'sap/lfa1.csv')}
-        qualify row_number() over (partition by lifnr order by mandt desc) = 1""").fetchall()
+        qualify row_number() over (partition by lifnr order by mandt desc) = 1
+            order by lifnr""").fetchall()
     groups: dict[str, list] = {}
     for r in rows:
         groups.setdefault(norm_key(r[1]) + norm_key(r[2]) + "|" + norm_key(r[4]), []).append(r)
