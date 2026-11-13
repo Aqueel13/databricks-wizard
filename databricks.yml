@@ -12,10 +12,28 @@ variables:
   catalog:
     description: Unity Catalog catalog that holds every layer
     default: wizard
+  alert_email:
+    description: Address for job failure emails. Not committed; set in .databricks/bundle/<target>/variable-overrides.json locally and the BUNDLE_VAR_alert_email secret in CI.
+  ci_service_principal:
+    description: Application ID of the wizard-ci service principal that deploys from GitHub Actions
+    default: 84c149b5-1d4a-4c35-bef0-434059df4e8c
   warehouse_id:
     description: SQL warehouse for SQL tasks, Genie and dashboards
     lookup:
       warehouse: Serverless Starter Warehouse
+
+# One deployment, shared by people and CI: both targets deploy the same resources from the same state, kept in the
+# CI service principal's home folder (not /Workspace/Shared, which every user can write). A deploy from a laptop
+# and a deploy from GitHub Actions therefore update the same resources and never create duplicates.
+workspace:
+  root_path: /Workspace/Users/${var.ci_service_principal}/.bundle/${bundle.name}
+
+# The CI service principal and workspace admins manage every resource; jobs and pipelines keep running as their owner.
+permissions:
+  - level: CAN_MANAGE
+    service_principal_name: ${var.ci_service_principal}
+  - level: CAN_MANAGE
+    group_name: admins
 
 targets:
   dev:
@@ -23,5 +41,5 @@ targets:
     workspace:
       profile: wizard
   ci:
-    # used by GitHub Actions; credentials come from DATABRICKS_HOST / DATABRICKS_TOKEN
+    # GitHub Actions: DATABRICKS_HOST + DATABRICKS_CLIENT_ID/SECRET of the wizard-ci service principal (OAuth M2M)
     workspace: {}

@@ -167,9 +167,10 @@ See [ADR 0007](adr/0007-governance-model.md).
 
 ## 8. Orchestration and delivery
 
-- **Lakeflow Jobs:** `ingest` (pipeline update) → `entity_resolution` → `gold_refresh` → `doc_index_sync` → `dq_report`. Kept to ≤5 concurrent tasks (Free Edition limit).
-- **Databricks Asset Bundles** describe pipelines, jobs, the app and permissions as code, with `dev` and `prod` targets in separate schemas or catalogs.
-- **GitHub Actions:** lint and unit tests (pytest + chispa on local Spark) → `bundle validate` → `bundle deploy -t dev` → smoke-test job.
+- **Lakeflow Jobs:** one `wizard-ingest` job, triggered when a shipper manifest lands: bronze → silver → (`vector_index_sync` ∥ `entity_resolution`) → gold → `governance` → `semantic_layer` → `health_check`. A failed run emails the owner; the address is a bundle variable kept out of the repo (local `variable-overrides.json`, CI secret).
+- **Databricks Asset Bundles** describe the pipelines, job, both apps, the dashboard and their permissions as code. There is one deployment, kept in the `wizard-ci` service principal's home folder. The `dev` target (a person, CLI profile) and the `ci` target (GitHub Actions) both deploy to it, so they update the same resources instead of creating copies.
+- **GitHub Actions:** ruff and per-package pytest → `bundle validate` → `bundle plan` → `bundle deploy` (pushes to main only). It authenticates as the `wizard-ci` service principal with OAuth M2M; there are no personal tokens. The service principal has CAN_MANAGE on the bundle's resources and nothing else. Jobs and pipelines still run as their owner, so CI can change the code but not who the code runs as. If a deploy would delete or recreate a resource, it stops in CI, because destructive changes need a person to approve them.
+- **Version pin:** the CLI in CI (`setup-cli@v1.23.0`) matches the one that wrote the deployment state. An older CLI uses the Terraform engine and would not see the deployed resources.
 
 ## 9. Platform constraints
 

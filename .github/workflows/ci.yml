@@ -30,19 +30,30 @@ jobs:
         run: python -m py_compile pipelines/*.py er/jobs/run_er.py
 
   bundle:
-    # Validates the Databricks Asset Bundle. Runs only when workspace credentials are configured as
-    # repository secrets (DATABRICKS_HOST + DATABRICKS_TOKEN, ideally for a service principal).
+    # Validates the Databricks Asset Bundle on every PR and push; deploys it on pushes to main once lint and tests
+    # pass. Authenticates as the wizard-ci service principal (OAuth M2M); the CLI version must match the one that
+    # owns the deployment state (direct engine), or it would not recognise the deployed resources.
+    needs: [lint, tests]
     runs-on: ubuntu-latest
+    concurrency: {group: bundle-deploy, cancel-in-progress: false}
     env:
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+      BUNDLE_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
     steps:
       - uses: actions/checkout@v4
-      - uses: databricks/setup-cli@v0.236.0
+      - name: skipped
+        if: env.DATABRICKS_HOST == ''
+        run: echo "No Databricks secrets configured (e.g. a fork); bundle validation skipped."
+      - uses: databricks/setup-cli@v1.23.0
         if: env.DATABRICKS_HOST != ''
       - name: databricks bundle validate
         if: env.DATABRICKS_HOST != ''
         run: databricks bundle validate -t ci
-      - name: skipped
-        if: env.DATABRICKS_HOST == ''
-        run: echo "No DATABRICKS_HOST secret configured; bundle validation skipped."
+      - name: databricks bundle plan
+        if: env.DATABRICKS_HOST != ''
+        run: databricks bundle plan -t ci
+      - name: databricks bundle deploy
+        if: env.DATABRICKS_HOST != '' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: databricks bundle deploy -t ci
