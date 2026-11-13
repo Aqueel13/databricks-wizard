@@ -28,6 +28,9 @@ jobs:
       - name: pipeline code compiles
         if: matrix.package == 'er'
         run: python -m py_compile pipelines/*.py er/jobs/run_er.py
+      - name: script tests (stdlib only)
+        if: matrix.package == 'er'
+        run: uv run --no-project --with pytest pytest -q scripts/tests
 
   bundle:
     # Validates the Databricks Asset Bundle on every PR and push; deploys it on pushes to main once lint and tests

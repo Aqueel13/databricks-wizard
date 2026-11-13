@@ -109,3 +109,24 @@ What the benchmark changed, beyond picking a model:
   tool calls as text (`[get_document(...)]`) instead of structured calls, so it is not used for agents.
 - **Scoring needs care:** a "wrong" answer used non-breaking hyphens in dates (`2026‑06‑19`); the checker now
   normalizes dash characters.
+
+## Benchmark 5: clause extraction from real contracts (CUAD)
+
+Benchmark 3 scores extraction against documents this project generated. CUAD tests the same approach (one `ai_query`
+call with a strict JSON schema) on real commercial contracts filed with the SEC, converted from PDF to text, against
+the Atticus Project's expert answers. Code: `scripts/cuad_bench.py` (I/O) and `scripts/cuad_score.py` (scoring, tested).
+
+- **Sample:** 100 contracts, picked deterministically (smallest SHA-1 of the file name) from the 410 labelled contracts
+  under 80,000 characters (~20k tokens), so every model sees the whole contract.
+- **Fields a procurement team acts on:** agreement date, governing law, renewal term, notice to stop renewal, and
+  8 yes/no clauses: anti-assignment, change of control, termination for convenience, cap on liability, audit rights,
+  insurance, minimum commitment, warranty duration. Each field's definition is CUAD's own category description.
+- **Scoring:** dates compare only the parts CUAD knows (`[]/[]/2020` checks the year); governing law ignores
+  "State of", "laws of" and similar; renewal and notice compare days (a month is 30, a year 365, ±3%); answers CUAD
+  gives in another form (e.g. "perpetual" renewal) are not scored. For the yes/no clauses, precision and recall of
+  "Yes" are reported too, because a missed clause costs a reviewer more than a false flag.
+- **Coverage in the sample:** 94–100 scored answers per field; "Yes" rates range from 8 (warranty duration) to 71
+  (anti-assignment).
+
+Results: pending (needs model serving; the sample is uploaded).
+
