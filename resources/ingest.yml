@@ -94,11 +94,18 @@ resources:
             pipeline_id: ${resources.pipelines.wizard_gold.id}
         - task_key: semantic_layer
           depends_on:
-            - task_key: gold
+            - task_key: governance
           sql_task:
             warehouse_id: ${var.warehouse_id}
             file:
               path: ../pipelines/semantic_layer.sql
+        - task_key: governance
+          depends_on:
+            - task_key: gold
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../pipelines/governance.sql
         - task_key: health_check
           depends_on:
             - task_key: semantic_layer

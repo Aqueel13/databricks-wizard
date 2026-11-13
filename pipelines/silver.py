@@ -330,7 +330,8 @@ def dq_findings():
     f.append(sr.where("national_id_valid = false")
              .select("source", "source_id", F.lit("supplier").alias("entity"),
                      F.lit("invalid_national_id").alias("rule"), F.lit("error").alias("severity"),
-                     F.concat(F.col("national_id_type"), F.lit(" fails validation: "), F.col("national_id")).alias("detail")))
+                     # no raw ID in the text: free-text detail would bypass the column mask on national_id
+                     F.concat(F.col("national_id_type"), F.lit(" fails format/checksum validation")).alias("detail")))
     inv, po = dlt.read("coupa_invoices"), dlt.read("coupa_purchase_orders")
     j = inv.alias("i").join(po.alias("p"), F.col("i.po_id") == F.col("p.id"))
     f.append(j.where(F.abs(F.col("i.total") - F.col("p.total")) > 0.01)

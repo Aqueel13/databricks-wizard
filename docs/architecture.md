@@ -157,8 +157,9 @@ plus provenance (SQL run, tables, citations); every call is audited in `ops.agen
 
 - **Catalog layout:** `wizard.bronze`, `wizard.silver`, `wizard.gold`, plus `wizard.ops` for manifests, run logs and eval results.
 - **Tags:** `pii`, `source_system`, `data_owner`, `certified` on tables and columns.
-- **Column masks:** bank account and tax ID are masked unless the user is in `wizard_stewards`.
-- **Row filters:** optional demo of category-manager scoping (each manager sees only their categories).
+- **Column masks:** bank account (IBAN) and national/tax IDs, in silver and gold, are masked unless the user is in `wizard_stewards` (9 tables, 11 columns).
+- **Row filters:** `gold.fact_invoice` is scoped by company code (`wizard_cc_<code>` groups); stewards and analysts see all.
+- **Enforcement:** policies are applied by the `governance` job task on every run, and the `health_check` task fails if a `pii`-tagged column is unmasked.
 - **Lineage:** Unity Catalog system tables (`system.access.table_lineage`, `column_lineage`) power `trace_metric`.
 - **Groups:** `wizard_engineers`, `wizard_stewards`, `wizard_analysts`, and the `wizard_agent` service principal.
 

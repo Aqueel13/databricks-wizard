@@ -18,4 +18,12 @@ SELECT
   assert_true((SELECT count_if(fields IS NULL) FROM wizard.silver.doc_extractions) = 0,
               'document extractions that are not valid JSON'),
   assert_true((SELECT count_if(supplier_id IS NULL) FROM wizard.gold.supplier_documents) = 0,
-              'documents not linked to a golden supplier');
+              'documents not linked to a golden supplier'),
+  -- every column tagged as PII must carry a mask (a rewrite must never drop one silently)
+  assert_true((SELECT count(*) FROM wizard.information_schema.column_masks) >= 10,
+              'column masks missing on PII columns'),
+  assert_true((SELECT count(*) FROM wizard.information_schema.column_tags t
+               LEFT ANTI JOIN wizard.information_schema.column_masks m
+                 ON m.table_schema = t.schema_name AND m.table_name = t.table_name AND m.column_name = t.column_name
+               WHERE t.tag_name = 'pii') = 0,
+              'a column tagged pii has no mask');
