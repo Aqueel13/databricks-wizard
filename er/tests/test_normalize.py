@@ -50,3 +50,18 @@ def test_mcp_app_copy_of_normalize_is_identical():
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     assert (root / "apps/mcp/wizard_mcp/normalize.py").read_text() == (root / "er/wizard_er/normalize.py").read_text()
+
+
+def test_indic_legal_forms_and_consonant_skeleton():
+    from wizard_er.normalize import normalize_name
+    hi, en = normalize_name("राम मार्केटिंग प्राइवेट लिमिटेड"), normalize_name("Ram Marketing Pvt Ltd")
+    assert hi["legal_form"] == en["legal_form"] == "LLC" and hi["has_indic"] and not en["has_indic"]
+    assert hi["cskel"] == en["cskel"]
+    assert normalize_name("ग्लोबल इन्वेस्टमेंट प्रा. लि.")["cskel"] == normalize_name("Global Investment Pvt. Ltd.")["cskel"]
+
+
+def test_address_numbers_and_street():
+    from wizard_er.normalize import normalize_address
+    a = normalize_address("1020/31 Gautam Nagar, Indore")
+    assert a["addr_numbers"] == "1020 31" and a["addr_skel"]
+    assert normalize_address(None) == {"addr_numbers": None, "addr_skel": None}

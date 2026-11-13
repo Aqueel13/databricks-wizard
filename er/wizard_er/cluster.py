@@ -124,11 +124,15 @@ def cluster(unique_ids, links: pd.DataFrame, df: pd.DataFrame) -> tuple[dict[str
             x = parent[x]
         return x
 
-    def conflict(fa, fb) -> str | None:
+    def conflict(fa, fb, same_street: bool = False) -> str | None:
         if fa["nid"] and fb["nid"] and not (fa["nid"] & fb["nid"]):
             return "different national IDs"
         if fa["juris"] and fb["juris"] and not (fa["juris"] & fb["juris"]):
             return "different legal jurisdictions"
+        # the same street address (numbers + street) outweighs a city mismatch, which is often a parsing artefact
+        # ("New Delhi, West Delhi" vs "Delhi"); IDs and jurisdictions above still block
+        if same_street:
+            return None
         if fa["city"] and fb["city"] and max(jaro_winkler(x, y) for x in fa["city"] for y in fb["city"]) < 0.85:
             return "different cities"
         return None
@@ -143,7 +147,8 @@ def cluster(unique_ids, links: pd.DataFrame, df: pd.DataFrame) -> tuple[dict[str
         ra, rb = find(r.unique_id_l), find(r.unique_id_r)
         if ra == rb:
             return
-        why = None if r.method == "steward" else conflict(facts[ra], facts[rb])
+        same_street = getattr(r, "gamma_address", None) == 2   # "same address numbers, similar street"
+        why = None if r.method == "steward" else conflict(facts[ra], facts[rb], same_street)
         if why:
             refuse(r, why)
             return

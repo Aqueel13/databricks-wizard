@@ -22,13 +22,23 @@ UA_FORMS = [
     ("тзов", "LLC"), ("тов", "LLC"), ("прат", "CORP"), ("пат", "CORP"), ("ат", "CORP"), ("пп", "PE"),
     ("дп", "SE"), ("кп", "SE"),
 ]
+# Indian legal forms in native scripts (Devanagari, Gujarati, Tamil, Telugu, Kannada, Bengali), removed BEFORE
+# transliteration: unidecode renders प्राइवेट लिमिटेड as "praaivett limittedd", which no Latin rule recognises.
+INDIC_FORMS = [
+    ("प्राइवेट लिमिटेड", "LLC"), ("प्रा. लि.", "LLC"), ("प्रा लि", "LLC"), ("एलएलपी", "PARTNERSHIP"),
+    ("लिमिटेड", "LLC"), ("પ્રાઇવેટ લિમિટેડ", "LLC"), ("પ્રા. લિ.", "LLC"), ("પ્રા લિ", "LLC"), ("લિમિટેડ", "LLC"),
+    ("பிரைவேட் லிமிடெட்", "LLC"), ("லிமிடெட்", "LLC"), ("ప్రైవేట్ లిమిటెడ్", "LLC"), ("లిమిటెడ్", "LLC"),
+    ("ಪ್ರೈವೇಟ್ ಲಿಮಿಟೆಡ್", "LLC"), ("ಲಿಮಿಟೆಡ್", "LLC"), ("প্রাইভেট লিমিটেড", "LLC"), ("লিমিটেড", "LLC"),
+]
+_INDIC = re.compile(r"[\u0900-\u0DFF]")
 # Latin legal forms, matched on the transliterated, punctuation-free text.
 LATIN_FORMS = [
     ("spolka z ograniczona odpowiedzialnoscia", "LLC"), ("sp z o o", "LLC"), ("sp z oo", "LLC"),
     ("spolka akcyjna", "CORP"), ("spolka jawna", "PARTNERSHIP"), ("spolka komandytowa", "PARTNERSHIP"),
     ("sp j", "PARTNERSHIP"), ("sp k", "PARTNERSHIP"),
     ("gesellschaft mit beschrankter haftung", "LLC"), ("besloten vennootschap", "LLC"),
-    ("private limited", "LLC"), ("pte ltd", "LLC"), ("private enterprise", "PE"), ("state enterprise", "SE"),
+    ("private limited", "LLC"), ("pvt ltd", "LLC"), ("private ltd", "LLC"), ("pvt", "LLC"), ("opc", "LLC"),
+    ("pte ltd", "LLC"), ("private enterprise", "PE"), ("state enterprise", "SE"),
     ("private jsc", "CORP"), ("public jsc", "CORP"), ("aktiengesellschaft", "CORP"), ("incorporated", "CORP"),
     ("corporation", "CORP"), ("limited", "LLC"), ("l l c", "LLC"), ("l l p", "PARTNERSHIP"),
     ("llc", "LLC"), ("ltd", "LLC"), ("gmbh", "LLC"), ("bv", "LLC"), ("b v", "LLC"), ("tov", "LLC"),
@@ -62,7 +72,8 @@ _NONALNUM = re.compile(r"[^a-z0-9]+")
 def _strip_forms(text: str, forms: list[tuple[str, str]]) -> tuple[str, str | None, str | None]:
     found = juris = None
     for phrase, cls in forms:  # whole-word matches anywhere (legal forms appear first or last)
-        pat = re.compile(rf"(?<![\w]){re.escape(phrase)}(?![\w])")
+        # \w would treat Indic vowel signs as boundaries, so native-script forms use whitespace/punctuation borders
+        pat = re.compile(rf"(?<![^\s\.,\-]){re.escape(phrase)}(?![^\s\.,\-])")
         if pat.search(text):
             text = pat.sub(" ", text)
             found = found or cls
@@ -90,6 +101,10 @@ def normalize_name(name: str | None) -> dict:
     raw = name or ""
     low = _QUOTES.sub(" ", unicodedata.normalize("NFKC", raw)).lower()
     low, form_ua, juris_ua = _strip_forms(low, UA_FORMS)
+    has_indic = bool(_INDIC.search(raw))
+    form_in = None
+    if has_indic:
+        low, form_in, _ = _strip_forms(low, INDIC_FORMS)
     lat = latin(low)
     lat, form_lat, juris_lat = _strip_forms(lat, LATIN_FORMS)
     tokens = [ABBREV.get(t, t) for t in lat.split() if t not in NOISE]
@@ -98,7 +113,7 @@ def normalize_name(name: str | None) -> dict:
     core = " ".join(tokens)
     return {
         "name_latin": latin(raw),
-        "legal_form": form_ua or form_lat,
+        "legal_form": form_ua or form_in or form_lat,
         "jurisdiction": juris_ua or juris_lat,
         "name_core": core,
         "name_sorted": " ".join(sorted(tokens)),
@@ -107,7 +122,33 @@ def normalize_name(name: str | None) -> dict:
         # numbers in a name usually identify the entity (Plant 1500 vs Plant 1600, Gr. 00 vs Gr. 01)
         "name_numbers": " ".join(sorted({str(int(n)) for n in re.findall(r"\d+", latin(raw))})) or None,
         "has_cyrillic": bool(re.search("[Ѐ-ӿ]", raw)),
+        "has_indic": has_indic,
+        # consonant skeleton: Indic scripts transliterate without the inherent vowel ("सन कंस्ट्रक्शंस" ->
+        # "sn knstrksns"), so vowels are what differ from the English spelling ("San Constructions")
+        "cskel": consonants(skeleton(core)),
     }
+
+
+def consonants(skel: str) -> str:
+    # voiced/unvoiced pairs fold together: Tamil script writes both with one letter (க = k/g, ப = p/b, ட = t/d)
+    s = re.sub(r"[aeiou]", "", skel.replace("ck", "k").replace("c", "k")).translate(str.maketrans("bdgh", "ptkk"))
+    return re.sub(r"(.)\1+", r"\1", s)
+
+
+ADDRESS_NOISE = {"no", "number", "plot", "shop", "flat", "floor", "road", "rd", "street", "st", "near", "opp",
+                 "nagar", "sector", "sec", "building", "bldg", "house", "hn", "door", "suite", "ste", "ave", "avenue",
+                 "first", "second", "ground", "unit", "block", "area", "phase", "india", "usa"}
+
+
+def normalize_address(address: str | None) -> dict:
+    """Street-level identity for records without registration IDs: the numbers in the address (house, plot,
+    shop, suite) and a skeleton of its distinctive words. City and state are compared elsewhere."""
+    if not address:
+        return {"addr_numbers": None, "addr_skel": None}
+    lat = latin(address)
+    nums = sorted({str(int(n)) for n in re.findall(r"\d+", lat) if len(n) <= 6})
+    words = [w for w in lat.split() if not w.isdigit() and len(w) > 2 and w not in ADDRESS_NOISE]
+    return {"addr_numbers": " ".join(nums) or None, "addr_skel": skeleton("".join(words[:4])) or None}
 
 
 def normalize_id(id_type: str | None, value: str | None) -> str | None:

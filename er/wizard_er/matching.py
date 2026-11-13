@@ -12,7 +12,7 @@ import splink.comparison_library as cl
 from splink import DuckDBAPI, Linker, SettingsCreator, block_on
 from splink.blocking_rule_library import CustomRule
 
-from .normalize import normalize_city, normalize_id, normalize_name
+from .normalize import normalize_address, normalize_city, normalize_id, normalize_name
 
 NN_K = 6
 NN_MIN_COS = 0.80
@@ -32,12 +32,15 @@ def prepare(records: pd.DataFrame, embeddings: pd.DataFrame) -> pd.DataFrame:
     df["nid"] = [n if (ok is not None and not pd.isna(ok) and bool(ok)) else None
                  for n, ok in zip(df["nid_any"], df["national_id_valid"])]
     df["city_norm"] = df["city"].map(normalize_city)
+    # street address (optional input): numbers + distinctive words, for data without registration IDs
+    addr = (df["address"] if "address" in df else pd.Series([None] * len(df), index=df.index))
+    df = pd.concat([df, addr.map(normalize_address).apply(pd.Series)], axis=1)
     for c in ("name_core", "skeleton", "name_sorted", "first_token", "city_norm", "legal_form", "country"):
         df[c] = df[c].replace("", None)
     # explicit string dtype: an all-null column (e.g. no local-script names in a dataset) would otherwise be
     # inferred as INTEGER by DuckDB and break the string comparisons
     for c in ("name_core", "skeleton", "skeleton_local", "name_sorted", "first_token", "city_norm", "legal_form",
-              "jurisdiction", "name_numbers", "country", "nid", "nid_any"):
+              "jurisdiction", "name_numbers", "country", "nid", "nid_any", "cskel", "addr_numbers", "addr_skel"):
         df[c] = df[c].astype("string")
 
     # embedding of the name in its original script (local name when the record has one)
@@ -64,7 +67,9 @@ def prepare(records: pd.DataFrame, embeddings: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=["embedding"])
 
 
-def _settings() -> SettingsCreator:
+def _settings(indic: bool = False, addresses: bool = False) -> SettingsCreator:
+    """indic / addresses switch on the comparisons that only make sense when the data has Indic-script names or
+    street addresses, so the supplier model (neither) is unchanged by their existence."""
     nn90 = "(list_contains(nn90_l, unique_id_r) OR list_contains(nn90_r, unique_id_l))"
     nn80 = "(list_contains(nn_l, unique_id_r) OR list_contains(nn_r, unique_id_l))"
     jw_skel = "jaro_winkler_similarity(skeleton_l, skeleton_r)"
@@ -80,6 +85,8 @@ def _settings() -> SettingsCreator:
             cll.CustomLevel(f"{jw_skel} >= 0.95", "skeleton JW >= 0.95"),
             cll.CustomLevel("jaro_winkler_similarity(name_sorted_l, name_sorted_r) >= 0.92", "sorted tokens JW >= 0.92"),
             cll.CustomLevel(nn90, "embedding neighbours, cos >= 0.90"),
+            *([cll.CustomLevel("(has_indic_l OR has_indic_r) AND jaro_winkler_similarity(cskel_l, cskel_r) >= 0.92",
+                               "Indic script: consonant skeleton JW >= 0.92")] if indic else []),
             cll.CustomLevel(f"{jw_skel} >= 0.85", "skeleton JW >= 0.85"),
             cll.CustomLevel(nn80, "embedding neighbours, cos >= 0.80"),
             cll.ElseLevel(),
@@ -104,11 +111,26 @@ def _settings() -> SettingsCreator:
         output_column_name="name_numbers",
         comparison_levels=[cll.NullLevel("name_numbers"), cll.ExactMatchLevel("name_numbers"),
                            cll.ElseLevel().configure(m_probability=0.02, fix_m_probability=True)])
+    address = cl.CustomComparison(
+        output_column_name="address",
+        comparison_levels=[
+            cll.NullLevel("addr_numbers"),
+            cll.CustomLevel("addr_numbers_l = addr_numbers_r AND jaro_winkler_similarity(addr_skel_l, addr_skel_r) >= 0.85",
+                            "same address numbers, similar street"),
+            cll.ExactMatchLevel("addr_numbers", "same address numbers"),
+            cll.ElseLevel()])
+    extra_blocking = []
+    if indic:
+        extra_blocking.append(CustomRule("(l.has_indic OR r.has_indic) AND l.country = r.country "
+                                         "AND substr(l.cskel, 1, 4) = substr(r.cskel, 1, 4)"))
+    if addresses:
+        extra_blocking.append(CustomRule("l.addr_numbers = r.addr_numbers AND length(l.addr_numbers) >= 3 "
+                                         "AND l.country = r.country"))
     return SettingsCreator(
         link_type="dedupe_only",
         unique_id_column_name="unique_id",
         comparisons=[name, nid, cl.ExactMatch("country"), city, cl.ExactMatch("legal_form"),
-                     numbers],
+                     numbers, *([address] if addresses else [])],
         blocking_rules_to_generate_predictions=[
             block_on("nid"),
             block_on("substr(nid_any, 1, length(nid_any) - 1)"),
@@ -117,6 +139,7 @@ def _settings() -> SettingsCreator:
             block_on("name_sorted"),
             CustomRule("l.skeleton_local = r.skeleton OR l.skeleton = r.skeleton_local"),
             CustomRule("list_contains(l.nn, r.unique_id) OR list_contains(r.nn, l.unique_id)"),
+            *extra_blocking,
         ],
         retain_intermediate_calculation_columns=True,
         retain_matching_columns=True,
@@ -125,12 +148,14 @@ def _settings() -> SettingsCreator:
 
 MATCH_COLS = ["unique_id", "source", "source_id", "name", "name_local", "country", "city", "national_id",
               "name_core", "name_sorted", "skeleton", "skeleton_local", "first_token", "legal_form", "nid", "nid_any",
-              "city_norm", "jurisdiction", "name_numbers", "nn", "nn90"]
+              "city_norm", "jurisdiction", "name_numbers", "nn", "nn90", "has_indic", "cskel", "addr_numbers",
+              "addr_skel"]
 
 
 def score(df: pd.DataFrame, threshold: float = 0.2) -> tuple[pd.DataFrame, dict]:
     """Train the model without labels and score candidate pairs. Returns (pairs, model json)."""
-    linker = Linker(df[MATCH_COLS], _settings(), db_api=DuckDBAPI())
+    indic, addresses = bool(df["has_indic"].any()), bool(df["addr_numbers"].notna().any())
+    linker = Linker(df[MATCH_COLS], _settings(indic, addresses), db_api=DuckDBAPI())
     # Train on the strongest evidence the data has: national IDs when there are enough of them; otherwise
     # (e.g. sources without registration numbers) exact name + city.
     has_ids = df["nid"].notna().sum() >= 50

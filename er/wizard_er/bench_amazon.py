@@ -134,7 +134,7 @@ def main() -> None:
     print(f"sample: {len(rec)} records ({rec['source'].value_counts().to_dict()}), "
           f"{len(set(truth.values()))} true entities, cities parsed {rec['city'].notna().mean():.0%}")
     emb = embed(rec)
-    df = prepare(rec.drop(columns=["address"]), emb)
+    df = prepare(rec, emb)   # with street addresses: the matcher compares them when present
     pairs, _ = score(df)
     d = decide(pairs, df)                       # no LLM: band pairs stay unlinked
     print(d.groupby("method")["linked"].agg(["count", "sum"]).to_string())
