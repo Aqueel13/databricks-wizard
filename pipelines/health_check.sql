@@ -12,4 +12,10 @@ SELECT
   assert_true((SELECT count_if(status <> 'OK') FROM wizard.bronze.landing_reconciliation) = 0,
               'landing files not reconciled with their manifests'),
   assert_true((SELECT max_by(f1, er_run_at) FROM wizard.ops.er_eval WHERE scope = 'overall') >= 0.95,
-              'entity resolution F1 below 0.95 against the answer key');
+              'entity resolution F1 below 0.95 against the answer key'),
+  assert_true((SELECT count(*) FROM wizard.silver.doc_extractions) = (SELECT count(*) FROM wizard.silver.doc_parsed),
+              'not every parsed document has extracted fields'),
+  assert_true((SELECT count_if(fields IS NULL) FROM wizard.silver.doc_extractions) = 0,
+              'document extractions that are not valid JSON'),
+  assert_true((SELECT count_if(supplier_id IS NULL) FROM wizard.gold.supplier_documents) = 0,
+              'documents not linked to a golden supplier');

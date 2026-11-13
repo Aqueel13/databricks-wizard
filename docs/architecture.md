@@ -113,13 +113,24 @@ Details are in [ADR 0004](adr/0004-entity-resolution-approach.md), including wha
 
 ## 5. Knowledge layer (documents)
 
-1. PDFs land in `bronze.landing/docs/`, and a binary-file bronze table records path, hash and metadata.
-2. Parsing: `ai_parse_document()` if it is available on Free Edition. Otherwise `llama-4-maverick` via `ai_query()` on page images for scans, and `pypdf` for text PDFs.
-3. Structured extraction with `ai_query()` and a JSON schema: certificate type, issuer, expiry date, contract value, payment terms, termination clauses.
-4. Chunks in `silver.doc_chunks` carry `supplier_id`, `doc_id`, `page` and `chunk_id`, so every retrieved passage links back to a governed supplier and a page.
-5. Delta Sync vector index `wizard.silver.doc_chunks_idx` on the single Free Edition endpoint `wizard-vs`, using `databricks-gte-large-en` embeddings.
+```mermaid
+flowchart LR
+  B[bronze.docs_binary<br/>968 PDFs] --> P[silver.doc_parsed<br/>ai_parse_document<br/>text + OCR, pages]
+  P --> X[silver.doc_extractions<br/>ai_query + JSON schema<br/>Llama 4 Maverick]
+  P --> C[silver.doc_chunks<br/>one chunk per page<br/>+ document-key header]
+  C --> V[(Vector Search<br/>wizard-vs / doc_chunks_index<br/>qwen3 embeddings)]
+  X --> D[gold.supplier_documents<br/>linked to golden supplier,<br/>vs HICX / Coupa metadata]
+  D --> F[gold.document_findings<br/>metadata mismatches]
+  D --> R[supplier_risk_score<br/>document expiry outranks<br/>the system field]
+  V --> Q[doc Q&A: identifier lookup,<br/>then hybrid search;<br/>answers cite file + page]
+```
 
-Extracted fields such as certificate expiry go into gold risk features. So the documents are more than RAG context: they feed the numbers too.
+- **Parsing:** `ai_parse_document` (available on Free Edition) handles text PDFs and the scanned certificates (OCR) in one SQL function; parsed once per document in a streaming table. OCR shows a realistic quirk: Cyrillic letters read as Latin look-alikes (`ТОВ "РОМА"` → `TOB "POMA"`).
+- **Extraction:** one JSON schema per document type, every field required but nullable (an early test showed a model dropping the expiry date when fields were optional; another swapped customer and supplier until the prompt named the parties). Model chosen by benchmark (ADR 0005 benchmark 3): Llama 4 Maverick, 0.999 field accuracy, 1.000 on scanned certificates.
+- **Reconciliation:** document fields vs the system of record, joined by the key in the file path (never by the extracted number). Finds all 28 planted mismatches with no false positives. Certificate expiry from the document feeds compliance risk.
+- **Retrieval:** page-level chunks with a document-key header (element-level chunks split a clause heading from its text). Questions naming a document key are answered by exact lookup first, because embeddings treat `CTR-00247` and `CTR-00248` as near-identical; otherwise hybrid (keyword + vector) search. Answers come only from retrieved chunks and cite `[file, page]`; when the sources don't contain the answer the model says so.
+- **Exit test** (`scripts/m6_rag_eval.py`): 40 questions from the document answer key (incl. 10 without a document number): retrieval, answer and citation all 40/40.
+- Free Edition: one Vector Search endpoint. A Delta Sync index cannot follow a source that was fully overwritten; after a full refresh of `doc_chunks`, recreate the index (`scripts/vector_search_setup.py` is idempotent).
 
 ## 6. Semantic and consumption layer
 

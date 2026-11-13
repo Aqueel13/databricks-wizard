@@ -1,6 +1,6 @@
 # 0005: Pick models by benchmark, not by default
 
-**Status:** Accepted for ER adjudication and name embeddings (benchmarks below, 2026-11-13); tool-calling to benchmark in M7
+**Status:** Accepted for ER adjudication, name embeddings and document extraction (benchmarks below, 2026-11-13); tool-calling to benchmark in M7
 
 ## Context
 
@@ -67,3 +67,20 @@ partner its nearest neighbour (recall@1) or in the top 5 (recall@5)? Code: `er/w
 fail almost completely. **Even the multilingual model finds a cross-script partner in the top 5 only 47% of the
 time**, so embeddings are a backup candidate source; the transliteration skeleton (ADR 0004) is what makes
 Cyrillic–Latin matching work (F1 0.972).
+
+## Benchmark 3: document field extraction (M6)
+
+80 documents (40 certificates incl. scanned, 40 contracts), parsed with `ai_parse_document`, fields extracted with
+`ai_query` and a JSON schema per type; every field compared with the document answer key (`gt_document`).
+Code: `scripts/m6_extraction_bench.py`.
+
+| Model | All fields | Text certs | Scanned certs | Contracts | Time (80 docs) |
+|---|---|---|---|---|---|
+| **`llama-4-maverick`** | **0.999** | 0.997 | **1.000** | 1.000 | 33 s |
+| `meta-llama-3-3-70b-instruct` | 0.999 | 1.000 | 0.992 | 1.000 | 80 s |
+| `qwen3-next-80b-a3b-instruct` | 0.989 | 0.991 | 0.983 | 0.989 | 14 s |
+| `meta-llama-3-1-8b-instruct` | 0.986 | 0.978 | 0.992 | 0.991 | 14 s |
+
+**Decision:** Llama 4 Maverick. All four reach ~99% once the schema is right; the first, looser schema let models
+drop fields (Qwen omitted the expiry date) and swap contract parties (both Llamas named the customer as supplier).
+Schema and prompt design mattered more than model choice.

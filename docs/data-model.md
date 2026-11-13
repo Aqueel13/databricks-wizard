@@ -106,8 +106,9 @@ Examples: `bronze.sap_lfa1_cdc`, `bronze.sap_ekpo_cdc`, `bronze.coupa_suppliers`
 | `silver.goods_receipt` | receipt event | From `EKBE` (movement type GR) and Coupa receipts |
 | `silver.invoice` | invoice | `RBKP` and Coupa invoices |
 | `silver.certification` | certificate | HICX metadata merged with document extraction |
-| `silver.doc_chunks` | chunk | `doc_id`, `supplier_ref`, `page`, `chunk_id`, `text`, `doc_type` |
-| `silver.doc_extractions` | document | Typed fields from `ai_query()` with JSON schema |
+| `silver.doc_parsed` | document | `ai_parse_document` output: full text, elements with page numbers, parse errors |
+| `silver.doc_extractions` | document | Fields extracted with `ai_query` + JSON schema per type (`fields` VARIANT), model name |
+| `silver.doc_chunks` | document page | `chunk_id`, `page`, `content`, `chunk_text` (with document-key header); source of `silver.doc_chunks_index` |
 | `silver.sanctions_entities` | entity/alias | OFAC, exploded aliases |
 | `silver.dq_quarantine` | rejected row | `source`, `entity`, original row as JSON, `_dq_failed` rules, `_quarantined_at` (one shared table) |
 | `silver.supplier_records` | source supplier record | Canonical shape for entity resolution: SAP (35-char name split rejoined), Coupa and HICX records, national ID type and validity |
@@ -160,6 +161,8 @@ erDiagram
 | `supplier_kpi_monthly` | supplier × month | `on_time_pct`, `avg_days_late`, `rejection_rate`, `spend_usd`, `on_time_trend_6m` (slope) |
 | `supplier_risk_score` | supplier | `sanctions_score`, `financial_score`, `compliance_score` (cert expiry), `concentration_score`, `delivery_score`, `risk_score`, `risk_band`, `drivers` (array) |
 | `spend_concentration` | category × period | `total_spend`, `supplier_count`, `hhi`, `top1_share`, `top3_share` |
+| `supplier_documents` | document | extracted fields (party, number, dates, value, terms, law…), `supplier_id`, system-of-record values, `metadata_mismatch` |
+| `document_findings` | finding | `certificate_metadata_mismatch` / `contract_metadata_mismatch` with detail |
 | `supplier_dq_scorecard` | supplier | `completeness`, `validity`, `consistency`, `duplicate_count`, `issues` (array) |
 
 ### KPI definitions

@@ -28,6 +28,7 @@ resources:
           - openpyxl==3.1.5
       configuration:
         wizard.catalog: ${var.catalog}
+        wizard.pipelines_path: ${workspace.file_path}/pipelines
 
     wizard_gold:
       name: wizard-gold
@@ -73,6 +74,12 @@ resources:
             - task_key: bronze
           pipeline_task:
             pipeline_id: ${resources.pipelines.wizard_silver.id}
+        - task_key: vector_index_sync
+          depends_on:
+            - task_key: silver
+          environment_key: er
+          spark_python_task:
+            python_file: ../jobs/sync_vector_index.py
         - task_key: entity_resolution
           depends_on:
             - task_key: silver

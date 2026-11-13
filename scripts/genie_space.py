@@ -14,7 +14,8 @@ TITLE = "Supplier 360 (Databricks Wizard)"
 CAT = os.environ.get("WIZARD_CATALOG", "wizard")
 TABLES = [f"{CAT}.gold.{t}" for t in (
     "supplier_360", "metrics_spend", "metrics_delivery", "metrics_supplier", "spend_concentration",
-    "supplier_delivery_trend", "supplier_risk_score", "supplier_dq_scorecard", "dim_category")]
+    "supplier_delivery_trend", "supplier_risk_score", "supplier_dq_scorecard", "dim_category",
+    "supplier_documents", "document_findings")]
 INSTRUCTIONS = """You answer procurement questions for Larkspur Foods, a fictional food manufacturer (company codes US01, NL01, PL01, UA01).
 - One row in supplier_360 is one real-world supplier, resolved across SAP, Coupa and HICX (supplier_id). Always use supplier_id, never source-system vendor ids.
 - Money is in USD (amount_usd / spend_usd / "Spend USD"), converted at static FX rates.
@@ -24,6 +25,7 @@ INSTRUCTIONS = """You answer procurement questions for Larkspur Foods, a fiction
 - A sanctions screening ALERT is a name similarity pending review, never a finding. Never state that a supplier is sanctioned unless sanctions_confirmed > 0.
 - Spend concentration: spend_concentration (last 12 months, HHI 0-10,000; >= 2,500 highly concentrated, 1,500-2,500 moderately concentrated).
 - Master data quality: suppliers with incomplete, invalid or inconsistent master data are exactly supplier_dq_scorecard.has_issues = true (size(issues) > 0). Show legal_name, dq_score and the issues array; issue names: missing_national_id, invalid_national_id, missing_city, duplicate_records, conflicting_address, inconsistent_city_format, conflicting_national_ids, expired_certificate, invoice findings.
+- Documents: supplier_documents has one row per certificate / contract PDF with fields extracted from the document itself (end_date = certificate expiry or contract end), linked by supplier_id, plus what the system of record says (system_expiry_date, system_contract_value). The document outranks the system field. document_findings lists documents that disagree with the system (certificate_metadata_mismatch, contract_metadata_mismatch).
 - When listing suppliers, include legal_name, country and the measure that answers the question, ordered by severity."""
 SAMPLE_QUESTIONS = [
     "Which suppliers have deteriorating delivery performance?",

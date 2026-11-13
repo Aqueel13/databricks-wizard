@@ -77,6 +77,52 @@ SELECT x.*, c.supplier_id, round(x.amount_local * fx.usd_per_unit, 2) AS amount_
 FROM x LEFT JOIN ${catalog}.silver.er_clusters c ON c.source = x.source AND c.source_id = x.source_supplier_id
 LEFT JOIN dim_fx fx ON fx.currency = x.currency;
 
+
+-- ===================================================================== documents
+CREATE OR REFRESH MATERIALIZED VIEW supplier_documents
+COMMENT 'Every supplier document with its extracted fields (silver.doc_extractions), linked to the golden supplier, next to what the system of record says (HICX certification / Coupa contract). doc_key comes from the file path, not from extraction, so an extraction error cannot hide a mismatch.'
+AS
+WITH x AS (
+  SELECT e.doc_id, e.file_name, regexp_replace(e.file_name, '\\.pdf$', '') AS doc_key, e.doc_type, e.owner_id, e.model,
+         CASE WHEN e.doc_type = 'certificate' THEN e.fields:holder::string ELSE e.fields:supplier::string END AS party_name,
+         coalesce(e.fields:certificate_number::string, e.fields:agreement_number::string) AS extracted_number,
+         try_cast(coalesce(e.fields:issue_date::string, e.fields:start_date::string) AS DATE) AS start_date,
+         try_cast(coalesce(e.fields:expiry_date::string, e.fields:end_date::string) AS DATE) AS end_date,
+         e.fields:certificate_type::string AS certificate_type, e.fields:issuer::string AS issuer,
+         try_cast(e.fields:contract_value::string AS DECIMAL(18, 2)) AS contract_value, e.fields:currency::string AS currency,
+         try_cast(e.fields:payment_terms_days::string AS INT) AS payment_terms_days,
+         try_cast(e.fields:notice_days::string AS INT) AS notice_days,
+         e.fields:liability_cap::string AS liability_cap, e.fields:governing_law::string AS governing_law
+  FROM ${catalog}.silver.doc_extractions e
+),
+owner AS (
+  SELECT 'certificate' AS doc_type, source_id AS owner_id, supplier_id FROM ${catalog}.silver.er_clusters WHERE source = 'hicx'
+  UNION ALL
+  SELECT 'contract', s.number, c.supplier_id
+  FROM ${catalog}.silver.coupa_suppliers s
+  JOIN ${catalog}.silver.er_clusters c ON c.source = 'coupa' AND c.source_id = cast(s.id AS STRING)
+)
+SELECT x.*, o.supplier_id,
+       h.expiry_date AS system_expiry_date, k.value AS system_contract_value, k.end_date AS system_end_date,
+       CASE WHEN x.doc_type = 'certificate' THEN x.end_date <> h.expiry_date
+            ELSE abs(x.contract_value - k.value) > 0.01 OR x.end_date <> k.end_date END AS metadata_mismatch,
+       x.extracted_number <> x.doc_key AS number_mismatch
+FROM x
+LEFT JOIN owner o ON o.doc_type = x.doc_type AND o.owner_id = x.owner_id
+LEFT JOIN ${catalog}.silver.hicx_certifications h ON x.doc_type = 'certificate' AND h.certificate_number = x.doc_key
+LEFT JOIN ${catalog}.silver.coupa_contracts k ON x.doc_type = 'contract' AND k.number = x.doc_key;
+
+CREATE OR REFRESH MATERIALIZED VIEW document_findings
+COMMENT 'Documents that disagree with the system of record: certificate expiry (HICX) or contract value / end date (Coupa).'
+AS
+SELECT supplier_id, doc_type, doc_key, file_name,
+       CASE WHEN doc_type = 'certificate' THEN 'certificate_metadata_mismatch' ELSE 'contract_metadata_mismatch' END AS rule,
+       CASE WHEN doc_type = 'certificate'
+            THEN format_string('document expiry %s vs HICX %s', end_date, system_expiry_date)
+            ELSE format_string('document value %s %s / end %s vs Coupa %s / %s', currency, contract_value, end_date,
+                               system_contract_value, system_end_date) END AS detail
+FROM supplier_documents WHERE metadata_mismatch;
+
 -- ===================================================================== KPIs
 CREATE OR REFRESH MATERIALIZED VIEW supplier_kpi_monthly
 COMMENT 'Per supplier and month: receipts, on-time %, average days late, spend (USD).'
@@ -176,7 +222,10 @@ f AS (
   GROUP BY ALL
 ),
 x AS (
-  SELECT supplier_id, collect_set(rule) AS rules, count(*) AS n FROM ${catalog}.silver.er_dq_findings GROUP BY ALL
+  SELECT supplier_id, collect_set(rule) AS rules, count(*) AS n
+  FROM (SELECT supplier_id, rule FROM ${catalog}.silver.er_dq_findings
+        UNION ALL SELECT supplier_id, rule FROM document_findings WHERE supplier_id IS NOT NULL)
+  GROUP BY ALL
 ),
 agg AS (
   SELECT supplier_id, count(*) AS records, count(DISTINCT source) AS systems,
@@ -225,11 +274,13 @@ share AS (
   FROM (SELECT *, sum(spend) OVER (PARTITION BY category_id) AS cat_total FROM spend) GROUP BY supplier_id
 ),
 certs AS (
+  -- the certificate document itself outranks the HICX field when they disagree
   SELECT c.supplier_id, count(*) AS expired_certificates
   FROM ${catalog}.silver.hicx_certifications h
   JOIN ${catalog}.silver.hicx_suppliers s ON s.hicx_id = h.hicx_id
   JOIN ${catalog}.silver.er_clusters c ON c.source = 'hicx' AND c.source_id = h.hicx_id
-  WHERE h.expiry_date < h.export_date AND s.status = 'approved' GROUP BY ALL
+  LEFT JOIN supplier_documents d ON d.doc_type = 'certificate' AND d.doc_key = h.certificate_number
+  WHERE coalesce(d.end_date, h.expiry_date) < h.export_date AND s.status = 'approved' GROUP BY ALL
 ),
 alerts AS (
   SELECT supplier_id, count_if(status = 'open') AS sanctions_alerts, count_if(status = 'confirmed') AS sanctions_confirmed

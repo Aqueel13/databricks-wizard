@@ -373,3 +373,68 @@ def dq_summary():
     quarantined = q.groupBy("source", "entity", "rule").agg(F.count(F.lit(1)).alias("findings")) \
                    .withColumn("severity", F.lit("quarantined"))
     return findings.unionByName(quarantined)
+
+
+# ====================================================================== documents
+# Parsed once, incrementally (ai_parse_document handles both text PDFs and scanned images via OCR).
+@dlt.table(comment="Supplier documents parsed with ai_parse_document: full text plus elements with page numbers.",
+           table_properties={"delta.enableChangeDataFeed": "true"})
+def doc_parsed():
+    d = spark.readStream.table(f"{B}.docs_binary")  # noqa: F821
+    parsed = d.select("_file", "doc_type", "owner_id", "length", "_ingested_at",
+                      F.expr("ai_parse_document(content)").alias("parsed"))
+    elements = F.expr("""transform(cast(parsed:document:elements as array<variant>), e -> named_struct(
+        'content', e:content::string, 'type', e:type::string, 'page', e:bbox[0]:page_id::int))""")
+    return (parsed
+            .withColumn("doc_id", F.sha2("_file", 256))
+            .withColumn("file_name", F.regexp_extract("_file", r"([^/]+)$", 1))
+            .withColumn("elements", elements)
+            .withColumn("text", F.array_join(F.transform("elements", lambda e: e["content"]), "\n"))
+            .withColumn("pages", F.expr("size(cast(parsed:document:pages as array<variant>))"))
+            .withColumn("parse_error", F.expr("parsed:error_status::string"))
+            .select("doc_id", "_file", "file_name", "doc_type", "owner_id", "pages", "text", "elements",
+                    "parse_error", "length", "_ingested_at"))
+
+
+# Field extraction: one LLM call per document, ever (streaming). Model and schemas chosen by benchmark
+# (ADR 0005 benchmark 3: Llama 4 Maverick, 0.999 field accuracy incl. scanned certificates).
+import sys  # noqa: E402
+
+sys.path.insert(0, spark.conf.get("wizard.pipelines_path", "."))  # noqa: F821
+from doc_extraction import ai_query_sql  # noqa: E402
+
+EXTRACTION_MODEL = "databricks-llama-4-maverick"
+
+
+@dlt.table(comment=f"Structured fields extracted from each document ({EXTRACTION_MODEL}, JSON schema per type).")
+def doc_extractions():
+    d = dlt.read_stream("doc_parsed")
+    out = None
+    for dt in ("certificate", "contract"):
+        x = d.where(F.col("doc_type") == dt).select(
+            "doc_id", "file_name", "doc_type", "owner_id", F.expr(ai_query_sql(EXTRACTION_MODEL, dt)).alias("raw"))
+        out = x if out is None else out.unionByName(x)
+    return (out.withColumn("fields", F.expr("try_parse_json(raw)"))
+               .withColumn("model", F.lit(EXTRACTION_MODEL))
+               .withColumn("extracted_at", F.current_timestamp()))
+
+
+@dlt.table(comment="Retrieval chunks: one per document page (elements joined in reading order), prefixed with the "
+                   "document key so keyword search finds them. Source of the vector index (change data feed enabled). "
+                   "Element-level chunks were tried first: a clause heading and its text ended up in different chunks "
+                   "and the clause text lacked the agreement number.",
+           table_properties={"delta.enableChangeDataFeed": "true"})
+def doc_chunks():
+    d = dlt.read_stream("doc_parsed")
+    pages = F.expr("""transform(array_sort(array_distinct(transform(elements, e -> coalesce(e.page, 0)))),
+        p -> named_struct('page', p + 1, 'content',
+             array_join(transform(filter(elements, e -> coalesce(e.page, 0) = p), e -> e.content), '\n')))""")
+    e = d.select("doc_id", "file_name", "doc_type", "owner_id", F.explode(pages).alias("pg"))
+    key = F.regexp_replace("file_name", r"\.pdf$", "")
+    return (e.where(F.length(F.trim(F.col("pg.content"))) > 0)
+            .select(F.concat_ws("-", "doc_id", F.col("pg.page").cast("string")).alias("chunk_id"), "doc_id", "file_name",
+                    "doc_type", "owner_id", F.col("pg.page").alias("page"), F.lit("page").alias("element_type"),
+                    F.col("pg.content").alias("content"),
+                    F.concat(F.lit("Document "), key, F.lit(" ("), F.col("doc_type"), F.lit(", "), F.col("file_name"),
+                             F.lit(", page "), F.col("pg.page").cast("string"), F.lit(")\n"),
+                             F.col("pg.content")).alias("chunk_text")))
