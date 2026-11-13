@@ -180,7 +180,7 @@ Checked against the workspace on 2026-11-13 with `setup/00_capability_check.py`:
 | Jobs | max 5 concurrent tasks | Narrow DAGs |
 | File-arrival triggers | ✅ on UC volumes; wait-after-last-change must be > 60 s | Ingest job triggered by manifests (75 s wait) |
 | `VARIANT` in Lakeflow pipelines | ✅ | Bronze payload columns |
-| Tables per schema | **max 100**, and every streaming table / materialized view also creates a hidden `__materialization_…` table, so each pipeline object counts twice | One shared `silver.dq_quarantine` instead of one quarantine table per entity; layers in separate schemas; keep an eye on `information_schema.tables` counts |
+| Tables per schema | **max 100**, and every streaming table / materialized view also creates a hidden `__materialization_…` table, so each pipeline object counts twice | One shared `silver.dq_quarantine` instead of one quarantine table per entity; layers in separate schemas; keep an eye on `information_schema.tables` counts. Removing a table from a pipeline does **not** drop it, and dropping it does **not** drop its hidden `__materialization_…` table; drop both |
 | Compute | Serverless only, Python/SQL only | No Scala; Splink via pip on serverless |
 
 **Still to verify:** outbound internet from serverless (decides whether public data is fetched in Databricks or by the shipper), `ai_parse_document()` availability, metric views availability, and Splink installing on serverless.
