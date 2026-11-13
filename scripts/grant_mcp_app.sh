@@ -12,6 +12,9 @@ run() { $SQL "$1" >/dev/null && echo "  $1"; }
 echo "granting to app service principal $SP"
 run "GRANT USE CATALOG ON CATALOG $CAT TO \`$SP\`"
 for s in silver gold ops; do run "GRANT USE SCHEMA ON SCHEMA $CAT.$s TO \`$SP\`"; done
+# Grants go to the SP itself: Unity Catalog grants need account groups, and Free Edition only has workspace groups.
+# The app is also in the wizard_analysts workspace group (scripts/groups_setup.sh), which the policies check with
+# is_member(): masked PII, invoices of every company code.
 run "GRANT SELECT ON SCHEMA $CAT.gold TO \`$SP\`"
 for t in silver.supplier_records silver.er_clusters silver.er_review_queue silver.er_steward_decisions \
          silver.doc_parsed silver.doc_chunks_index ops.lineage_edges; do
