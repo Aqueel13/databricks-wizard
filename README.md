@@ -48,6 +48,8 @@ flowchart LR
 
 More detail:
 
+- [Write-up: how it was built and what it taught](docs/writeup.md)
+- [Business case](docs/business-case.md)
 - [Architecture](docs/architecture.md)
 - [Data model](docs/data-model.md)
 - [Roadmap](docs/roadmap.md)

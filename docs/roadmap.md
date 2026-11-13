@@ -13,7 +13,7 @@ Each milestone ends with something that can be demonstrated. Exit criteria are p
 | M6 ✅ | Knowledge layer | `ai_parse_document` (text + OCR), schema-based extraction (benchmarked), reconciliation vs HICX/Coupa, page-level chunks, Vector Search (hybrid + identifier lookup), cited Q&A; document expiry feeds risk | 40/40 cited answers correct; 28/28 planted document mismatches found (0 false positives); document-expired certificates raise compliance risk |
 | M7 ✅ | Agent interface | Three MCP servers on one Databricks App (analytics, knowledge, stewardship) mirroring WatchDog; audit log; agent proposals approved by people in the steward app; agent harness; tool-calling benchmark (ADR 0005); combined agent with WatchDog (read-only) | Combined agent answers cross-system questions with attribution; benchmark published; every call audited |
 | M8 ✅ | Governance & delivery | Tags, masks, row filters, service principal, Asset Bundles, GitHub Actions, `trace_metric` lineage tool | ✅ Clean deploy from CI (`wizard-ci` service principal, OAuth M2M); ✅ agent can't read masked columns (masks + health check); ✅ company-code row filter verified as a scoped SP; ✅ lineage traced end to end, table and row level (`scripts/lineage_e2e_check.py`) |
-| M9 | Story | Architecture write-up, business case, 3-minute demo video, case-study page | Published |
+| M9 🚧 | Story | [Write-up](writeup.md), [business case](business-case.md), 3-minute demo video ([script](demo-script.md)), case-study page | Drafts done; numbers refreshed after the v2 rebuild, then video recorded and page published |
 
 ## Stretch goals
 
