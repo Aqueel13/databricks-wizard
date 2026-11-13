@@ -10,3 +10,8 @@ ignore = ["E501", "B905"]   # long SQL strings read better unwrapped; zip(strict
 "pipelines/*.py" = ["F821"]   # `spark` is provided by the pipeline runtime
 "er/jobs/*.py" = ["E402"]     # imports after sys.path setup
 "setup/*.py" = ["F821", "E402"]  # Databricks notebook: spark, dbutils, display are notebook globals
+
+[lint.isort]
+# the steward app imports its sibling module `data`; pin it, since a local (gitignored) data/ folder would
+# otherwise make ruff classify it differently on a laptop than in CI
+known-local-folder = ["data"]
