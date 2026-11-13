@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uvx ruff@0.8.4 check .
+
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [er, sources, shipper]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv run --project ${{ matrix.package }} --with pytest pytest -q ${{ matrix.package }}/tests
+      - name: pipeline code compiles
+        if: matrix.package == 'er'
+        run: python -m py_compile pipelines/*.py er/jobs/run_er.py
+
+  bundle:
+    # Validates the Databricks Asset Bundle. Runs only when workspace credentials are configured as
+    # repository secrets (DATABRICKS_HOST + DATABRICKS_TOKEN, ideally for a service principal).
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@v0.236.0
+        if: env.DATABRICKS_HOST != ''
+      - name: databricks bundle validate
+        if: env.DATABRICKS_HOST != ''
+        run: databricks bundle validate -t ci
+      - name: skipped
+        if: env.DATABRICKS_HOST == ''
+        run: echo "No DATABRICKS_HOST secret configured; bundle validation skipped."

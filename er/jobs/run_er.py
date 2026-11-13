@@ -22,7 +22,6 @@ sys.path.insert(0, ER_ROOT)  # wizard_er package
 import pandas as pd  # noqa: E402
 from pyspark.sql import SparkSession  # noqa: E402
 from pyspark.sql import functions as F  # noqa: E402
-
 from wizard_er.adjudicate import MODEL, PROMPT_VERSION, adjudicate  # noqa: E402
 from wizard_er.cluster import cluster, decide  # noqa: E402
 from wizard_er.evaluate import pairwise  # noqa: E402
@@ -44,10 +43,21 @@ def exists(name: str) -> bool:
     return spark.catalog.tableExists(table(name))
 
 
-def save(df: pd.DataFrame, name: str, mode: str = "overwrite") -> None:
-    sdf = spark.createDataFrame(df) if len(df) else None
-    if sdf is None:
+def save(df: pd.DataFrame, name: str, mode: str = "overwrite", derived_from: list | None = None) -> None:
+    """Write a pandas result as a Delta table.
+
+    derived_from = [(table, [key columns]) or (table, None)]: the output is joined back to the tables it was
+    computed from (semi-join on the keys, or a one-row read when there are none). Rows don't change, but the
+    write's query plan now reads those tables, so Unity Catalog lineage links them. Without this, everything
+    downstream of the pandas step (golden records!) would have no recorded upstream."""
+    if not len(df):
         return
+    sdf = spark.createDataFrame(df)
+    for src, keys in (derived_from or []):
+        if keys:
+            sdf = sdf.join(spark.table(table(src)).select(*keys).distinct(), keys, "left_semi")
+        else:
+            sdf = sdf.crossJoin(spark.table(table(src)).select(F.lit(1).alias("_lineage")).limit(1)).drop("_lineage")
     (sdf.withColumn("er_run_id", F.lit(RUN_ID)).withColumn("er_run_at", F.current_timestamp())
         .write.mode(mode).option("overwriteSchema", "true").saveAsTable(table(name)))
 
@@ -80,6 +90,7 @@ cache = spark.table(table("silver.er_llm_adjudications")).toPandas()
 band = first[first["method"] == "llm_pending"]
 known = set(cache[(cache["model"] == MODEL) & (cache["prompt_version"] == PROMPT_VERSION)]["pair_key"])
 from databricks.sdk import WorkspaceClient  # noqa: E402
+
 new = adjudicate(band[~band["pair_key"].isin(known)], df, client=WorkspaceClient())
 if len(new):
     spark.createDataFrame(new[["pair_key", "model", "prompt_version", "verdict", "reason", "raw"]]) \
@@ -99,20 +110,22 @@ d["llm_reason"] = d["pair_key"].map(reasons)
 gcols = [c for c in d.columns if c.startswith("gamma_")]
 d["evidence"] = d[gcols].apply(lambda r: json.dumps({k[6:]: int(v) for k, v in r.items()}), axis=1)
 scored = d.drop(columns=[c for c in d.columns if c.startswith(("gamma_", "bf_"))])
-save(scored, "silver.er_scored_pairs")
+save(scored, "silver.er_scored_pairs", derived_from=[("silver.supplier_records", None), ("silver.er_name_embeddings", None), ("silver.er_llm_adjudications", None), ("silver.er_steward_decisions", None)])
 
 RCOLS = ["pair_key", "unique_id_l", "unique_id_r", "match_probability", "reason"]
 review = pd.concat([d[d["method"] == "review"].assign(reason="LLM unsure")[RCOLS],
                     refused[RCOLS] if len(refused) else pd.DataFrame(columns=RCOLS)], ignore_index=True)
 review = review[~review["pair_key"].isin(set(steward["pair_key"]))]
-save(review.assign(status="open"), "silver.er_review_queue")
-save(df[["unique_id", "source", "source_id", "supplier_id"]], "silver.er_clusters")
+save(review.assign(status="open"), "silver.er_review_queue", derived_from=[("silver.er_scored_pairs", ["pair_key"])])
+save(df[["unique_id", "source", "source_id", "supplier_id"]], "silver.er_clusters",
+     derived_from=[("silver.supplier_records", ["source", "source_id"]), ("silver.er_scored_pairs", None)])
 
 linked = scored[scored["linked"]].copy()
 linked["supplier_id"] = linked["unique_id_l"].map(assign)
 linked = linked[linked["supplier_id"] == linked["unique_id_r"].map(assign)]  # links that survived the constraints
 save(linked[["supplier_id", "pair_key", "unique_id_l", "unique_id_r", "method", "match_probability", "match_weight",
-             "evidence", "llm_reason"]], "gold.supplier_match_evidence")
+             "evidence", "llm_reason"]], "gold.supplier_match_evidence",
+     derived_from=[("silver.er_scored_pairs", ["pair_key"]), ("silver.er_clusters", ["supplier_id"])])
 
 # survivorship: field by field, most trusted source first
 PRIORITY = {"hicx": 0, "sap": 1, "coupa": 2}
@@ -144,17 +157,29 @@ for sid, g in df.groupby("supplier_id"):
         hicx_ids=sorted(g.loc[g["source"] == "hicx", "source_id"].tolist()),
         purchasing_blocked=bool((g["status"] == "blocked").any()),
     ))
-save(pd.DataFrame(rows), "gold.dim_supplier")
+save(pd.DataFrame(rows), "gold.dim_supplier", derived_from=[("silver.er_clusters", ["supplier_id"]), ("silver.supplier_records", None)])
 save(df[["supplier_id", "source", "source_id", "unique_id", "name", "country", "national_id"]]
      .merge(linked.groupby("unique_id_l")["method"].first().rename("match_method"), left_on="unique_id",
-            right_index=True, how="left"), "gold.supplier_source_xref")
+            right_index=True, how="left"), "gold.supplier_source_xref",
+     derived_from=[("silver.supplier_records", ["source", "source_id"]), ("silver.er_clusters", ["supplier_id"])])
 
 # ---------------------------------------------------------------- 4b. sanctions screening + cross-source DQ
 golden = pd.DataFrame(rows)
 sanctions = spark.table(table("silver.sanctions_names")).select(
     "ent_num", "name", "name_type", "program", "sdn_type").toPandas()
 hits = screen(golden, sanctions)
-save(hits.assign(status="open"), "gold.supplier_sanctions_hits")
+# steward verdicts on alerts (latest per supplier + sanctioned entity): confirmed / dismissed; otherwise open
+spark.sql(f"""CREATE TABLE IF NOT EXISTS {table('silver.sanctions_alert_decisions')}
+              (supplier_id STRING, ent_num BIGINT, decision STRING, steward STRING, note STRING,
+               screened_name STRING, sanctioned_name STRING, decided_at TIMESTAMP)""")
+dec = spark.sql(f"""SELECT supplier_id, ent_num, decision FROM {table('silver.sanctions_alert_decisions')}
+                    QUALIFY row_number() OVER (PARTITION BY supplier_id, ent_num ORDER BY decided_at DESC) = 1""").toPandas()
+verdict_of = {(a, int(b)): c for a, b, c in zip(dec["supplier_id"], dec["ent_num"], dec["decision"])}
+hits["status"] = [{"confirm": "confirmed", "dismiss": "dismissed"}.get(verdict_of.get((a, int(b))), "open")
+                  for a, b in zip(hits["supplier_id"], hits["ent_num"])]
+save(hits, "gold.supplier_sanctions_hits",
+     derived_from=[("gold.dim_supplier", ["supplier_id"]), ("silver.sanctions_names", ["ent_num"]),
+                   ("silver.sanctions_alert_decisions", None)])
 
 # city consistency within each supplier (only possible after entity resolution). Compare spellings, not the
 # phonetic skeleton used for matching (which deliberately hides "Kyiv" vs "Kyyiv"). The record that differs from
@@ -162,6 +187,7 @@ save(hits.assign(status="open"), "gold.supplier_sanctions_hits")
 #   conflicting_address       different spelling (typo, other city)
 #   inconsistent_city_format  same spelling, different case / diacritics ("Kyiv" vs "KYIV", "Kraków" vs "Krakow")
 from wizard_er.normalize import latin  # noqa: E402
+
 conf = []
 for sid, g in df[df["city"].notna() & (df["city"].astype(str) != "")].groupby("supplier_id"):
     if len(g) < 2:
@@ -186,7 +212,7 @@ for sid, g in df[df["city"].notna() & (df["city"].astype(str) != "")].groupby("s
             conf.append(dict(supplier_id=sid, source=r["source"], source_id=r["source_id"], rule=rule, city=r["city"],
                              other_cities=", ".join(sorted(set(raw) - {r["city"]}))))
 save(pd.DataFrame(conf, columns=["supplier_id", "source", "source_id", "rule", "city", "other_cities"]),
-     "silver.er_dq_findings")
+     "silver.er_dq_findings", derived_from=[("silver.er_clusters", ["supplier_id"])])
 
 # ---------------------------------------------------------------- 5. evaluation (when the answer key is present)
 metrics = None

@@ -167,7 +167,7 @@ def cluster(unique_ids, links: pd.DataFrame, df: pd.DataFrame) -> tuple[dict[str
     for u in unique_ids:
         members.setdefault(find(u), []).append(u)
     out = {}
-    for root, ms in members.items():
+    for ms in members.values():
         # stable id: hash of the smallest member key, so ids survive re-runs while clusters don't change
         sid = "SUP-" + hashlib.sha1(min(ms).encode()).hexdigest()[:10].upper()
         for m in ms:

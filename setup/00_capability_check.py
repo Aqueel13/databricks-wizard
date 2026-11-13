@@ -19,6 +19,7 @@ def check(name, fn):
         results.append((name, "FAIL", f"{type(e).__name__}: {e}"[:300]))
 
 from databricks.sdk import WorkspaceClient
+
 w = WorkspaceClient()
 
 # COMMAND ----------

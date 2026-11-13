@@ -99,7 +99,7 @@ def generate() -> None:
             nd += 1
             expiry = doc_expiry
         holder = c["legal_name_local"] or c["legal_name"]
-        lines = [f"This is to certify that the management system of", "", f"    {holder}",
+        lines = ["This is to certify that the management system of", "", f"    {holder}",
                  f"    {c['city'] or ''}, {c['country']}", "", f"has been assessed and found to conform to {c['cert_type']}",
                  f"Scope: {c['scope']}", "", f"Certificate number: {c['cert_number']}",
                  f"Original issue date: {c['issue_date']}", f"Expiry date: {expiry}", "",

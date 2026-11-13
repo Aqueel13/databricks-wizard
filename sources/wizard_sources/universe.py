@@ -328,7 +328,6 @@ class Builder:
     def run(self) -> None:
         rng = self.rng
         self.sap_demo()
-        direct = {d["true_supplier_id"] for d in self.sap_direct}
         demo_by_id = {s["true_supplier_id"]: s for s in self.suppliers}
         # direct SAP vendors also appear in group systems (contracts in Coupa, onboarding in HICX)
         for d in self.sap_direct:

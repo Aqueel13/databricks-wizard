@@ -32,7 +32,7 @@ def main(n: int = 90) -> None:
     for model in MODELS:
         t = time.time()
         with ThreadPoolExecutor(8) as ex:
-            out = list(ex.map(lambda p: _ask(w, recs[p[0]], recs[p[1]], model),
+            out = list(ex.map(lambda p, m=model: _ask(w, recs[p[0]], recs[p[1]], m),
                               zip(band["unique_id_l"], band["unique_id_r"])))
         v = pd.Series([o["verdict"] for o in out], index=band.index)
         decided = v != "unsure"

@@ -20,7 +20,7 @@ import os
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(os.environ.get("WIZARD_ROOT", Path(__file__).resolve().parents[2]))
@@ -35,7 +35,7 @@ LOCAL_LANDING = ROOT / "data" / "landing_local"
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def new_batch_id(source: str, entity: str) -> str:

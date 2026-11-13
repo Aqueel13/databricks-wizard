@@ -92,7 +92,7 @@ def main() -> None:
         if text:
             print("  text:", re.sub(r"\s+", " ", text)[:300])
     payload = json.dumps(results).replace("'", "''")
-    sql(f"""create table if not exists wizard.ops.genie_eval (run_at timestamp, results string)""")
+    sql("""create table if not exists wizard.ops.genie_eval (run_at timestamp, results string)""")
     sql(f"""insert into wizard.ops.genie_eval values (current_timestamp(), '{payload}')""")
     print(f"\n{sum(r['passed'] for r in results)}/{len(results)} questions passed")
 

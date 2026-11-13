@@ -22,3 +22,6 @@ targets:
     default: true
     workspace:
       profile: wizard
+  ci:
+    # used by GitHub Actions; credentials come from DATABRICKS_HOST / DATABRICKS_TOKEN
+    workspace: {}
