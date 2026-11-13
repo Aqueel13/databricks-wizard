@@ -1,6 +1,6 @@
 # 0005: Pick models by benchmark, not by default
 
-**Status:** Accepted for ER adjudication (benchmark below, 2026-11-13); tool-calling and embeddings still to benchmark in M7
+**Status:** Accepted for ER adjudication and name embeddings (benchmarks below, 2026-11-13); tool-calling to benchmark in M7
 
 ## Context
 
@@ -50,3 +50,20 @@ correct; its wrong "match" verdicts cluster on one-record-to-many patterns, whic
 `qwen35-122b-a10b` (the original primary) could not be used: it is a reasoning model whose output is a list of
 blocks starting with a long reasoning block, and 2,000 tokens were not enough to reach the answer. `/no_think`
 is ignored and the endpoint rejects chat-template parameters.
+
+## Benchmark 2: name embeddings (2026-11-13)
+
+All 5,374 supplier names embedded with each model; for every record with a true partner (answer key), is a
+partner its nearest neighbour (recall@1) or in the top 5 (recall@5)? Code: `er/wizard_er/bench_embeddings.py`.
+
+| Scope | `qwen3-embedding-0-6b` | `gte-large-en` | `bge-large-en` |
+|---|---|---|---|
+| Overall (n=2,817) | **0.888 / 0.931** | 0.846 / 0.865 | 0.844 / 0.875 |
+| Cyrillic–Latin (n=536) | **0.271 / 0.465** | 0.007 / 0.024 | 0.041 / 0.132 |
+| Latin–Latin (n=2,149) | 0.966 / 0.990 | 0.976 / 0.994 | 0.967 / 0.993 |
+| Polish–Polish (n=231) | 0.952 / 0.996 | 0.961 / 0.991 | 0.948 / 0.996 |
+
+**Decision:** keep `qwen3-embedding-0-6b`. The models are equal on Latin names; across scripts the English models
+fail almost completely. **Even the multilingual model finds a cross-script partner in the top 5 only 47% of the
+time**, so embeddings are a backup candidate source; the transliteration skeleton (ADR 0004) is what makes
+Cyrillic–Latin matching work (F1 0.972).

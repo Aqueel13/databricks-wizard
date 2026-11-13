@@ -72,4 +72,23 @@ The generator first grouped SAP demo vendors by `NAME1` + city, so training copi
 ### Known limitations
 
 - Sanctions screening is name-only: 82 alerts for 6 planted near-matches. Alerts are for review, never findings. Next step: OFAC addresses (`add.csv`) for country disambiguation.
-- External benchmark (Amazon ML Challenge sample) not yet run.
+- Indic scripts and street addresses: see the external benchmark below.
+
+### External benchmark (Amazon ML Challenge 2026, internal use only)
+
+`er/wizard_er/bench_amazon.py`: 4,000 source-1 businesses, all their source-2/3 matches and 3,000 distractors
+(20,939 records, 6,999 true entities, US + India). **Unchanged supplier configuration, no tuning, no LLM**
+(2,125 band pairs left unlinked). Name embeddings from the production model.
+
+| Subset | Records | Precision | Recall | Pairwise F1 | B-cubed F1 |
+|---|---|---|---|---|---|
+| US | 12,521 | 0.994 | 0.747 | **0.853** | 0.909 |
+| India | 8,418 | 0.636 | 0.291 | 0.400 | 0.681 |
+| All | 20,939 | 0.890 | 0.564 | 0.690 | 0.825 |
+
+What it shows:
+- **US:** near-perfect precision out of the box on a different domain; the recall gap is mostly the unadjudicated LLM band.
+- **India, two concrete gaps:** (1) names in Devanagari, Telugu and Gujarati, whose legal forms (`प्रा. लि.`, `प्राइवेट लिमिटेड`, `Pvt Ltd`) the normalizer doesn't know, so transliterated variants never share a skeleton; (2) **no street-address comparison**: here identity often lives in the address (`PJA Infrastructure LLP` vs `Aviiri`, same `1020/31 Gautam Nagar`), and generic names in the same city over-merge (`Elite Sangh` / `Rn Sangh`). Supplier masters have registration IDs; this data doesn't.
+- Next steps, both general: Indic legal forms + transliteration rules; an address comparison used when national IDs are absent.
+
+Running it also hardened the matcher for data without IDs or local names: Splink training now picks its deterministic rule from the evidence available (IDs, else exact name + city), string columns get an explicit dtype (an all-null column was inferred as INTEGER), and the cluster code treats pandas NA as missing.

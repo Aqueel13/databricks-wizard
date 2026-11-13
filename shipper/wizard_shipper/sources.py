@@ -144,12 +144,12 @@ def ship_hicx(sink: Sink, state: State) -> list[dict]:
     out = []
     for folder in sorted((EXPORTS / "hicx").glob("*")):
         batch = Batch("hicx", "export", extra={"export_date": folder.name})
+        todo = []
         for f in sorted(folder.iterdir()):
             rel = f"hicx/{folder.name}/{f.name}"
-            sha = _sha(f)
-            if state.shipped_sha(rel) == sha:
-                continue
-            batch.add(sink, rel, f.read_bytes(), _records(f))
+            if state.shipped_sha(rel) != _sha(f):
+                todo.append((rel, f.read_bytes(), _records(f)))
+        batch.add_many(sink, todo)
         m = batch.close(sink, state)
         for fi in batch.files:
             state.mark_shipped(re.sub(r"^.*?(hicx/)", r"\1", fi["path"]), fi["sha256"])
@@ -161,14 +161,18 @@ def ship_hicx(sink: Sink, state: State) -> list[dict]:
 def ship_docs(sink: Sink, state: State) -> dict | None:
     batch = Batch("docs", "pdf")
     root = EXPORTS / "docs"
+    todo = []
     for f in sorted(root.rglob("*.pdf")):
         rel = f"docs/{f.relative_to(root).as_posix()}"
-        sha = _sha(f)
-        if state.shipped_sha(rel) == sha:
-            continue
-        batch.add(sink, rel, f.read_bytes(), 1)
+        data = f.read_bytes()
+        sha = hashlib.sha256(data).hexdigest()
+        if state.shipped_sha(rel) != sha:
+            todo.append((rel, data, 1, sha))
+    batch.add_many(sink, [(rel, data, n) for rel, data, n, _ in todo])
+    m = batch.close(sink, state)
+    for rel, _, _, sha in todo:  # mark shipped only after the manifest exists
         state.mark_shipped(rel, sha)
-    return batch.close(sink, state)
+    return m
 
 
 def ship_public(sink: Sink, state: State) -> dict | None:

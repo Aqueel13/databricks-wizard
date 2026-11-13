@@ -40,3 +40,18 @@ def test_state_is_separate_per_sink(sandbox):
     State("local").set("coupa", "invoices", "2026-01-01T00:00:00Z")
     assert State("volume").get("coupa", "invoices") is None
     assert State("local").get("coupa", "invoices") == "2026-01-01T00:00:00Z"
+
+
+def test_add_many_lists_files_in_order_and_fails_whole_batch(sandbox):
+    sink = LocalSink(sandbox / "landing")
+    b = Batch("docs", "pdf")
+    b.add_many(sink, [(f"docs/{i}.pdf", bytes([i]), 1) for i in range(20)], workers=8)
+    assert [f["path"].rsplit("/", 1)[-1] for f in b.files] == [f"{i}.pdf" for i in range(20)]
+
+    def boom(rel, data):
+        raise OSError("upload failed")
+    bad = Batch("docs", "pdf")
+    sink.put = boom
+    with pytest.raises(OSError):
+        bad.add_many(sink, [("docs/x.pdf", b"x", 1)])
+    assert bad.files == []  # nothing recorded, so close() writes no manifest

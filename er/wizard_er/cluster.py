@@ -16,10 +16,17 @@ T_AUTO = 0.95
 T_LLM = 0.50
 
 
+def _plain(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    """Columns as plain Python objects with None for missing (pandas NA can't be used in truth tests)."""
+    x = df[["unique_id", *cols]].astype(object)
+    return x.where(x.notna(), None)
+
+
 def decide(pairs: pd.DataFrame, df: pd.DataFrame, llm: pd.DataFrame | None = None,
            steward: pd.DataFrame | None = None, t_auto: float = T_AUTO, t_llm: float = T_LLM) -> pd.DataFrame:
-    nid = dict(zip(df["unique_id"], df["nid"]))
-    rec = df.set_index("unique_id")[["name_core", "country", "city_norm", "jurisdiction"]].to_dict("index")
+    plain = _plain(df, ["nid", "name_core", "country", "city_norm", "jurisdiction"])
+    nid = dict(zip(plain["unique_id"], plain["nid"]))
+    rec = plain.set_index("unique_id")[["name_core", "country", "city_norm", "jurisdiction"]].to_dict("index")
     p = pairs.copy()
     p["pair_key"] = [f"{min(a, b)}|{max(a, b)}" for a, b in zip(p["unique_id_l"], p["unique_id_r"])]
     p["same_valid_id"] = [nid.get(a) is not None and nid.get(a) == nid.get(b)
@@ -107,7 +114,7 @@ def cluster(unique_ids, links: pd.DataFrame, df: pd.DataFrame) -> tuple[dict[str
     conflicting facts into one cluster (two different valid national IDs, clearly different cities in the same
     country, or two different legal jurisdictions) is refused and returned for steward review."""
     parent = {u: u for u in unique_ids}
-    info = df.set_index("unique_id")[["nid", "city_norm", "jurisdiction"]].to_dict("index")
+    info = _plain(df, ["nid", "city_norm", "jurisdiction"]).set_index("unique_id").to_dict("index")
     facts = {u: {"nid": {info[u]["nid"]} - {None}, "city": {info[u]["city_norm"]} - {None, ""},
                  "juris": {info[u]["jurisdiction"]} - {None}} for u in unique_ids}
 

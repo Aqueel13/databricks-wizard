@@ -30,7 +30,8 @@ PROFILE = os.environ.get("DATABRICKS_CONFIG_PROFILE", "wizard")
 KAFKA = os.environ.get("WIZARD_KAFKA", "localhost:19092")
 COUPA_URL = os.environ.get("WIZARD_COUPA_URL", "http://localhost:8081")
 COUPA_KEY = os.environ.get("COUPA_API_KEY", "wizard-dev-key")
-STATE_DIR = ROOT / "data"
+STATE_DIR = Path(os.environ.get("WIZARD_STATE_DIR", ROOT / "data"))
+UPLOAD_WORKERS = int(os.environ.get("WIZARD_UPLOAD_WORKERS", "8"))
 LOCAL_LANDING = ROOT / "data" / "landing_local"
 
 
@@ -142,6 +143,16 @@ class Batch:
         path = sink.put(rel, data)
         self.files.append(dict(path=path, records=records,
                                bytes=len(data), sha256=hashlib.sha256(data).hexdigest()))
+
+    def add_many(self, sink: Sink, items: list[tuple[str, bytes, int]], workers: int = UPLOAD_WORKERS) -> None:
+        """Upload many files concurrently. Every upload must succeed before close() writes the manifest, so the
+        batch stays all-or-nothing from the reader's point of view; files are listed in input order."""
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max(1, workers)) as ex:
+            paths = list(ex.map(lambda it: sink.put(it[0], it[1]), items))  # raises if any upload fails
+        for (_rel, data, records), path in zip(items, paths, strict=True):
+            self.files.append(dict(path=path, records=records, bytes=len(data),
+                                   sha256=hashlib.sha256(data).hexdigest()))
 
     def close(self, sink: Sink, state: State) -> dict | None:
         """Write the manifest last. Returns the manifest (None if the batch is empty)."""

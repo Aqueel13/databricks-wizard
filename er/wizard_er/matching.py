@@ -34,6 +34,11 @@ def prepare(records: pd.DataFrame, embeddings: pd.DataFrame) -> pd.DataFrame:
     df["city_norm"] = df["city"].map(normalize_city)
     for c in ("name_core", "skeleton", "name_sorted", "first_token", "city_norm", "legal_form", "country"):
         df[c] = df[c].replace("", None)
+    # explicit string dtype: an all-null column (e.g. no local-script names in a dataset) would otherwise be
+    # inferred as INTEGER by DuckDB and break the string comparisons
+    for c in ("name_core", "skeleton", "skeleton_local", "name_sorted", "first_token", "city_norm", "legal_form",
+              "jurisdiction", "name_numbers", "country", "nid", "nid_any"):
+        df[c] = df[c].astype("string")
 
     # embedding of the name in its original script (local name when the record has one)
     emb = embeddings.copy()
@@ -126,9 +131,14 @@ MATCH_COLS = ["unique_id", "source", "source_id", "name", "name_local", "country
 def score(df: pd.DataFrame, threshold: float = 0.2) -> tuple[pd.DataFrame, dict]:
     """Train the model without labels and score candidate pairs. Returns (pairs, model json)."""
     linker = Linker(df[MATCH_COLS], _settings(), db_api=DuckDBAPI())
-    linker.training.estimate_probability_two_random_records_match([block_on("nid")], recall=0.7)
+    # Train on the strongest evidence the data has: national IDs when there are enough of them; otherwise
+    # (e.g. sources without registration numbers) exact name + city.
+    has_ids = df["nid"].notna().sum() >= 50
+    deterministic = block_on("nid") if has_ids else block_on("name_core", "city_norm")
+    linker.training.estimate_probability_two_random_records_match([deterministic], recall=0.7)
     linker.training.estimate_u_using_random_sampling(max_pairs=2e6, seed=42)
-    linker.training.estimate_parameters_using_expectation_maximisation(block_on("nid"))
+    linker.training.estimate_parameters_using_expectation_maximisation(
+        deterministic if has_ids else block_on("first_token", "city_norm"))
     linker.training.estimate_parameters_using_expectation_maximisation(block_on("country", "substr(skeleton, 1, 4)"))
     pairs = linker.inference.predict(threshold_match_probability=threshold).as_pandas_dataframe()
     keep = ["unique_id_l", "unique_id_r", "match_probability", "match_weight"] + \
