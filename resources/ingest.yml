@@ -109,9 +109,17 @@ resources:
             warehouse_id: ${var.warehouse_id}
             file:
               path: ../pipelines/governance.sql
+        - task_key: delivery_alerts
+          depends_on:
+            - task_key: governance  # not alongside it: governance alters gold tables this task reads
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../pipelines/delivery_alerts.sql
         - task_key: health_check
           depends_on:
             - task_key: semantic_layer
+            - task_key: delivery_alerts
           sql_task:
             warehouse_id: ${var.warehouse_id}
             file:

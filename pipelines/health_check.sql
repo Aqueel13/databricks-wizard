@@ -19,6 +19,9 @@ SELECT
               'document extractions that are not valid JSON'),
   assert_true((SELECT count_if(supplier_id IS NULL) FROM wizard.gold.supplier_documents) = 0,
               'documents not linked to a golden supplier'),
+  assert_true((SELECT count(*) FROM wizard.gold.supplier_delivery_alerts WHERE status = 'open')
+              = (SELECT count_if(deteriorating) FROM wizard.gold.supplier_delivery_trend),
+              'open delivery alerts out of step with supplier_delivery_trend'),
   -- every column tagged as PII must carry a mask (a rewrite must never drop one silently)
   assert_true((SELECT count(*) FROM wizard.information_schema.column_masks) >= 10,
               'column masks missing on PII columns'),

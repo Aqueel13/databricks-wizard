@@ -31,7 +31,7 @@ WatchDog's split by capability so one agent can use both systems the same way:
 
 | Server | Tools |
 |---|---|
-| `/analytics/mcp` (read-only) | `list_metrics`, `query_metric` (definitions read live from the UC metric views; returns the SQL and `low_sample` flags), `find_suppliers` (governed listing), `search_suppliers` (any spelling or script, via the ER skeleton), `get_supplier_360`, `explain_supplier_match`, `trace_metric` (lineage snapshot), `simulate_consolidation` (what-if), `run_exploratory_sql` (labelled fallback, gold only) |
+| `/analytics/mcp` (read-only) | `list_metrics`, `query_metric` (definitions read live from the UC metric views; returns the SQL and `low_sample` flags), `find_suppliers` (governed listing), `list_delivery_alerts` (new and resolved deterioration alerts since a timestamp; the feed WatchDog polls), `search_suppliers` (any spelling or script, via the ER skeleton), `get_supplier_360`, `explain_supplier_match`, `trace_metric` (lineage snapshot), `simulate_consolidation` (what-if), `run_exploratory_sql` (labelled fallback, gold only) |
 | `/knowledge/mcp` | `search_documents`, `answer_document_question` (cites `[file, p. N]`, says when not found), `get_document` (document vs system of record) |
 | `/stewardship/mcp` | `list_review_items`, `propose_decision`, `list_proposals`: **agents propose, a person approves** in the steward app ("Agent proposals" tab); approval writes the decision under the person's name, citing the proposal |
 

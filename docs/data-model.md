@@ -130,6 +130,7 @@ Written by the `entity_resolution` task (`er/jobs/run_er.py`) after silver.
 | `gold.supplier_source_xref` | Every source record with its `supplier_id` and how it was matched |
 | `gold.supplier_sanctions_hits` | Screening alerts: supplier name vs OFAC name/alias, score, program, `sdn_countries` (from OFAC addresses), `country_check` (match / conflict / unknown), `status` (open / auto_cleared / confirmed / dismissed). A country conflict with similarity below 0.97 is auto-cleared; a steward's verdict always wins. Alerts are for review, not findings |
 | `gold.dim_supplier_history` | SCD type 2 versions of the golden record (name, IDs, location, legal form, source systems, block). Merged by the ER job; `is_current` marks the live version |
+| `gold.supplier_delivery_alerts` | One row per alert: supplier, `open`/`resolved`, `opened_at`, `resolved_at`, latest delivery metrics. Written by the `delivery_alerts` job task (MERGE against `supplier_delivery_trend`) |
 | `gold.dim_fx` | Monthly USD rates from ECB euro reference rates. Facts convert at the document month. UAH uses a fixed rate (the ECB doesn't publish it). SAP TCURR isn't used: the demo extract covers only 2006–2010 |
 | `ops.er_eval` | Pairwise / B-cubed / per-script metrics and defect recall per run (when the answer key is present) |
 | `ops.er_runs` | Run summary (records, pairs, links by method, review queue size, LLM calls, F1) and the trained model |

@@ -15,7 +15,8 @@ supplier_id: find it with search_suppliers, then use get_supplier_360. Prefer qu
 governed definitions (Unity Catalog metric views) and the SQL used is returned. trace_metric shows where a number comes
 from. simulate_consolidation is a what-if, not a forecast. run_exploratory_sql is a fallback for questions no tool
 covers; say that its results are exploratory. A sanctions screening alert is a name similarity pending review, never a
-finding. Money is USD at static FX rates."""
+finding. list_delivery_alerts is the feed of newly deteriorating (and recovered) suppliers; poll it with `since`.
+Money is USD, converted at monthly ECB reference rates."""
 
 mcp = FastMCP("wizard-analytics", instructions=INSTRUCTIONS, stateless_http=True)
 
@@ -223,6 +224,37 @@ def find_suppliers(risk_band: str | None = None, deteriorating: bool | None = No
                       LEFT JOIN {CAT}.gold.dim_category c ON c.category_id = s.main_category
                       {"WHERE " + " AND ".join(where) if where else ""}""", p)[0]["n"]
     return {"result": query(q, p), "total_matching": total, "sql": q, "parameters": p}
+
+
+@mcp.tool()
+@audited("analytics")
+def list_delivery_alerts(status: str = "open", since: str | None = None, limit: int = 50,
+                         ctx: Context | None = None) -> dict:
+    """Delivery deterioration alerts: suppliers whose on-time rate fell and lateness rose beyond the market
+    (statistically tested), with when the alert opened and, once the supplier recovered, when it resolved.
+    status: 'open' | 'resolved' | 'all'. since: ISO date or timestamp; returns only alerts opened or resolved after it
+    (use the previous call's `checked_at` to get what is new). An alert describes performance, not its cause."""
+    if status not in ("open", "resolved", "all"):
+        raise ValueError("status must be 'open', 'resolved' or 'all'")
+    where, p = [], {}
+    if status != "all":
+        where.append("status = :st")
+        p["st"] = status
+    if since:
+        where.append("(opened_at > CAST(:since AS TIMESTAMP) OR resolved_at > CAST(:since AS TIMESTAMP))")
+        p["since"] = since
+    q = f"""SELECT alert_id, supplier_id, legal_name, country, status, opened_at, resolved_at, as_of_date,
+                   round(on_time_baseline, 3) AS on_time_baseline, round(on_time_recent, 3) AS on_time_recent,
+                   round(excess_days_late_increase, 1) AS excess_days_late_increase, z_score, n_recent,
+                   round(lifetime_spend_usd, 0) AS lifetime_spend_usd, risk_band
+            FROM {CAT}.gold.supplier_delivery_alerts
+            {"WHERE " + " AND ".join(where) if where else ""}
+            ORDER BY coalesce(resolved_at, opened_at) DESC LIMIT {max(1, min(int(limit), 200))}"""
+    checked = query(f"SELECT max(last_evaluated_at) AS t FROM {CAT}.gold.supplier_delivery_alerts")[0]["t"]
+    return {"result": query(q, p), "checked_at": checked, "sql": q, "parameters": p,
+            "definition": "deteriorating = on-time rate down >= 10 points and market-adjusted lateness up >= 5 days "
+                          "(z >= 1.64), last 6 months vs prior 12, on >= 5 recent and >= 8 baseline receipts",
+            "provenance": [f"{CAT}.gold.supplier_delivery_alerts", f"{CAT}.gold.supplier_delivery_trend"]}
 
 
 @mcp.tool()

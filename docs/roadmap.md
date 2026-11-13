@@ -20,7 +20,7 @@ Each milestone ends with something that can be demonstrated. Exit criteria are p
 - ✅ `simulate_consolidation` what-if tool (MCP analytics server)
 - ✅ Steward review UI (second Databricks App) for the entity-resolution queue, sanctions alerts and agent proposals
 - Supplier hierarchy rollups via GLEIF parent relationships (not built: GLEIF was dropped as a source)
-- Drift alerts: a Lakeflow job that flags newly deteriorating suppliers and notifies WatchDog
+- ✅ Drift alerts: the `delivery_alerts` job task keeps open/resolved alert history; WatchDog polls `list_delivery_alerts` (MCP)
 - CUAD contract-clause extraction benchmark
 
 ## Links to other portfolio projects
