@@ -65,13 +65,17 @@ Landing layout:
   _manifests/<source>/<batch>.json                # row counts, checksums, watermark
 ```
 
-Each batch has a manifest, so bronze can reconcile what arrived against what was sent. That reconciliation is the first data-quality check.
+Each batch has a manifest, so bronze can reconcile what arrived against what was sent. That reconciliation is the first data-quality check (`bronze.landing_reconciliation`, one row per file with status `OK`, `MISMATCH`, `NOT_LOADED` or `NO_MANIFEST`).
+
+**Delivery guarantees.** The shipper writes data files first and the manifest last, and only then commits Kafka offsets or advances Coupa watermarks. A crash can therefore re-send data (at-least-once) but never lose it. Silver deduplicates SAP events on `(kafka_topic, kafka_partition, kafka_offset)` and Coupa records on `(id, updated-at)`; Coupa pulls also re-read a 60-second overlap window on purpose.
+
+**Triggering.** The `wizard-ingest` job has a file-arrival trigger on `_manifests/`, so every completed batch starts a pipeline update with no manual step. Free Edition requires the trigger's wait-after-last-change to be over 60 s (set to 75 s), so end-to-end latency from a Postgres commit to bronze is typically 3–5 minutes.
 
 ## 3. Medallion layers
 
 | Layer | Contract | Built with |
 |---|---|---|
-| **Bronze** | Append-only, schema-on-read, plus ingest metadata (`_source`, `_file`, `_ingested_at`, `_batch_id`). Never edited. | Auto Loader streaming tables in a Lakeflow Declarative Pipeline |
+| **Bronze** | Append-only, schema-on-read, plus ingest metadata (`_file`, `_batch_id`, `_ingested_at`). Never edited. SAP CDC events and Coupa records are stored whole as `VARIANT` (`payload`), so upstream schema changes never break ingestion; CSVs land as string columns, xlsx and PDFs as binary. | Auto Loader streaming tables in a Lakeflow Declarative Pipeline (`pipelines/bronze.py`) |
 | **Silver** | Typed, deduplicated, conformed to a canonical model. CDC applied. Bad rows quarantined, not dropped. | `AUTO CDC` (SCD1 for transactions, SCD2 for vendor master), expectations, quarantine tables |
 | **Entity resolution** | Clusters of source records that refer to one real supplier, with match scores and explanations. | Splink (Fellegi–Sunter) + embedding similarity + `ai_query()` for the uncertain middle band |
 | **Gold** | Business-ready, keyed on `supplier_id`. Facts, dimensions, KPIs, risk. | Materialized views / jobs |
@@ -174,6 +178,8 @@ Checked against the workspace on 2026-11-13 with `setup/00_capability_check.py`:
 | System lineage/billing tables | ✅ exist, 0 rows on day 1 | Re-check after propagation delay |
 | Apps | max 3, stop after 24h | MCP server + one spare; restart before demos |
 | Jobs | max 5 concurrent tasks | Narrow DAGs |
+| File-arrival triggers | ✅ on UC volumes; wait-after-last-change must be > 60 s | Ingest job triggered by manifests (75 s wait) |
+| `VARIANT` in Lakeflow pipelines | ✅ | Bronze payload columns |
 | Compute | Serverless only, Python/SQL only | No Scala; Splink via pip on serverless |
 
 **Still to verify:** outbound internet from serverless (decides whether public data is fetched in Databricks or by the shipper), `ai_parse_document()` availability, metric views availability, and Splink installing on serverless.
