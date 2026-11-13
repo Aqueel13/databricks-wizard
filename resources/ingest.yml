@@ -92,3 +92,10 @@ resources:
             warehouse_id: ${var.warehouse_id}
             file:
               path: ../pipelines/semantic_layer.sql
+        - task_key: health_check
+          depends_on:
+            - task_key: semantic_layer
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../pipelines/health_check.sql

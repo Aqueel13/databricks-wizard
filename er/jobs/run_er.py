@@ -57,9 +57,15 @@ def save(df: pd.DataFrame, name: str, mode: str = "overwrite", derived_from: lis
         if keys:
             sdf = sdf.join(spark.table(table(src)).select(*keys).distinct(), keys, "left_semi")
         else:
-            sdf = sdf.crossJoin(spark.table(table(src)).select(F.lit(1).alias("_lineage")).limit(1)).drop("_lineage")
-    (sdf.withColumn("er_run_id", F.lit(RUN_ID)).withColumn("er_run_at", F.current_timestamp())
-        .write.mode(mode).option("overwriteSchema", "true").saveAsTable(table(name)))
+            # LEFT join to (at most) one row: reads the table for lineage, never removes rows, even when the
+            # source table is empty (an inner cross join with an empty table would drop everything)
+            one = spark.table(table(src)).select(F.lit(1).alias("_lineage")).limit(1)
+            sdf = sdf.join(one, on=F.lit(True), how="left").drop("_lineage")
+    sdf = sdf.withColumn("er_run_id", F.lit(RUN_ID)).withColumn("er_run_at", F.current_timestamp())  # no .cache() on serverless
+    n = sdf.count()
+    if n != len(df):  # lineage joins must never change the data; fail loudly if they do
+        raise RuntimeError(f"{name}: {len(df)} rows computed but {n} after lineage joins")
+    sdf.write.mode(mode).option("overwriteSchema", "true").saveAsTable(table(name))
 
 
 # ---------------------------------------------------------------- 1. inputs + incremental embeddings

@@ -1,0 +1,15 @@
+-- Databricks Wizard: end-of-run health check. Fails the job (assert_true raises) when a core invariant breaks,
+-- so a run can never report SUCCESS while leaving gold empty or unmapped (this happened once, see M5 notes).
+SELECT
+  assert_true((SELECT count(*) FROM wizard.gold.dim_supplier) > 1000,
+              'gold.dim_supplier has too few golden suppliers'),
+  assert_true((SELECT count(*) FROM wizard.silver.er_clusters) = (SELECT count(*) FROM wizard.silver.supplier_records),
+              'er_clusters does not cover every supplier record'),
+  assert_true((SELECT count_if(supplier_id IS NULL) FROM wizard.gold.fact_po_line) = 0,
+              'PO lines without a golden supplier'),
+  assert_true((SELECT count(*) FROM wizard.gold.supplier_360) = (SELECT count(*) FROM wizard.gold.dim_supplier),
+              'supplier_360 does not match dim_supplier'),
+  assert_true((SELECT count_if(status <> 'OK') FROM wizard.bronze.landing_reconciliation) = 0,
+              'landing files not reconciled with their manifests'),
+  assert_true((SELECT max_by(f1, er_run_at) FROM wizard.ops.er_eval WHERE scope = 'overall') >= 0.95,
+              'entity resolution F1 below 0.95 against the answer key');

@@ -1,0 +1,15 @@
+resources:
+  apps:
+    steward:
+      name: wizard-steward
+      description: Supplier data steward workbench - match review queue and sanctions alerts (Databricks Wizard)
+      source_code_path: ../apps/steward
+      resources:
+        - name: warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: ingest-job
+          job:
+            id: ${resources.jobs.wizard_ingest.id}
+            permission: CAN_MANAGE_RUN

@@ -3,8 +3,9 @@
   uv run --project shipper python scripts/lineage_trace.py wizard.gold.supplier_360
   uv run --project shipper python scripts/lineage_trace.py wizard.gold.supplier_360 --check   # exit 1 if broken
 
---check verifies the chain is complete: every table reached must have at least one recorded upstream, until
-bronze, whose upstream is the landing volume. A table with no upstream edge means lineage is broken there.
+--check verifies the chain is complete: every table reached must have at least one recorded upstream, except the
+roots by design: bronze (fed from landing files), static reference tables and human decision tables written by
+the steward app. Any other table without an upstream edge means lineage is broken there.
 """
 from __future__ import annotations
 
@@ -51,7 +52,9 @@ def main() -> None:
                               for s in srcs[:8]) + (f" (+{len(srcs) - 8} more)" if len(srcs) > 8 else "")
             print(f"{'  ' * depth}{t}  <-  {label or 'NO UPSTREAM RECORDED'}")
             tables = [s for s in srcs if not s.startswith("path:")]
-            if not srcs and ".bronze." not in t and not t.endswith(("dim_fx", "dim_category")):
+            # roots by design: bronze (fed from landing files), static reference MVs, human decisions (steward app)
+            root = ".bronze." in t or t.endswith(("dim_fx", "dim_category", "_decisions"))
+            if not srcs and not root:
                 broken.append(t)
             for s in tables:
                 if s not in seen:
