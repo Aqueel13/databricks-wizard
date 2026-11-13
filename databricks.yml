@@ -1,0 +1,20 @@
+# Databricks Asset Bundle for Databricks Wizard.
+#   databricks bundle validate
+#   databricks bundle deploy
+#   databricks bundle run wizard_ingest
+bundle:
+  name: databricks-wizard
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog that holds every layer
+    default: wizard
+
+targets:
+  dev:
+    default: true
+    workspace:
+      profile: wizard

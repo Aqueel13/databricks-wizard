@@ -1,7 +1,7 @@
 COMPOSE := docker compose -f docker/compose.yml
 SRC     := uv run --project sources -q wizard-sources
 
-.PHONY: help data data-clean up seed cdc api sources simulate status down reset
+.PHONY: help data data-clean up seed cdc api sources simulate status down reset dbx-setup deploy ship ship-loop ground-truth ingest
 
 help:          ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-11s %s\n", $$1, $$2}'
@@ -39,3 +39,24 @@ down:          ## stop all containers (keeps data volumes)
 
 reset:         ## DESTRUCTIVE: stop everything and delete Postgres/Redpanda volumes (re-run `make sources`)
 	$(COMPOSE) --profile cdc --profile api down -v
+
+# ---------------------------------------------------------------- M2: landing + bronze
+SHIP := uv run --project shipper -q wizard-shipper
+
+dbx-setup:     ## create catalog, schemas and volumes in the workspace (idempotent)
+	bash scripts/dbx_setup.sh
+
+deploy:        ## deploy the bundle (bronze pipeline + file-triggered ingest job)
+	databricks bundle deploy
+
+ship:          ## ship every source to the landing volume once
+	$(SHIP) run
+
+ship-loop:     ## keep shipping every 30 s (with `make simulate` = continuous flow)
+	$(SHIP) run --interval 30
+
+ground-truth:  ## upload the generator's answer key to the ops volume
+	$(SHIP) ground-truth
+
+ingest:        ## run the bronze pipeline now (normally the file-arrival trigger does this)
+	databricks bundle run wizard_ingest

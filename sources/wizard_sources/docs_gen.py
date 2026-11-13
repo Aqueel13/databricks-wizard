@@ -10,6 +10,7 @@ which is the answer key for document extraction.
 from __future__ import annotations
 
 import random
+import shutil
 from datetime import timedelta
 from pathlib import Path
 
@@ -78,6 +79,8 @@ def generate() -> None:
     rng = random.Random(C.SEED + 3)
     db = duckdb.connect()
     root = C.EXPORTS / "docs"
+    if root.exists():  # regenerate from scratch so stale documents never linger
+        shutil.rmtree(root)
     gt = C.STAGE / "gt_defect.parquet"
     rel = db.sql(f"select * from '{gt}' where defect_type not in ('certificate_metadata_mismatch', 'contract_metadata_mismatch')")
     defects = [dict(zip(rel.columns, r)) for r in rel.fetchall()]

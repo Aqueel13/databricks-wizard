@@ -1,0 +1,30 @@
+resources:
+  pipelines:
+    wizard_bronze:
+      name: wizard-bronze
+      catalog: ${var.catalog}
+      schema: bronze
+      serverless: true
+      continuous: false
+      channel: CURRENT
+      libraries:
+        - file:
+            path: ../pipelines/bronze.py
+      configuration:
+        wizard.landing: /Volumes/${var.catalog}/bronze/landing
+
+  jobs:
+    wizard_ingest:
+      name: wizard-ingest
+      description: Runs the bronze pipeline whenever the shipper completes a batch (a new manifest lands).
+      max_concurrent_runs: 1
+      trigger:
+        pause_status: UNPAUSED
+        file_arrival:
+          url: /Volumes/${var.catalog}/bronze/landing/_manifests/
+          min_time_between_triggers_seconds: 60
+          wait_after_last_change_seconds: 30
+      tasks:
+        - task_key: bronze
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.wizard_bronze.id}
