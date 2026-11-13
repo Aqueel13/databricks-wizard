@@ -28,12 +28,9 @@ variables:
 workspace:
   root_path: /Workspace/Users/${var.ci_service_principal}/.bundle/${bundle.name}
 
-# The CI service principal and workspace admins manage every resource; jobs and pipelines keep running as their owner.
-permissions:
-  - level: CAN_MANAGE
-    service_principal_name: ${var.ci_service_principal}
-  - level: CAN_MANAGE
-    group_name: admins
+# No bundle-level `permissions`: when a bundle manages permissions on jobs and pipelines, the CLI makes the deploying
+# identity their owner, which a non-admin service principal may not do (and which would change who they run as).
+# The CI service principal gets CAN_MANAGE once, from scripts/grant_ci_sp.sh; owners and run-as stay unchanged.
 
 targets:
   dev:

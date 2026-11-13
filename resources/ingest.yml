@@ -48,9 +48,6 @@ resources:
       name: wizard-ingest
       description: Runs the bronze pipeline whenever the shipper completes a batch (a new manifest lands).
       max_concurrent_runs: 1
-      permissions:
-        - level: CAN_MANAGE_RUN   # the steward app re-runs the job after approvals
-          service_principal_name: ${resources.apps.steward.service_principal_client_id}
       email_notifications:
         on_failure: [ "${var.alert_email}" ]
       queue:
