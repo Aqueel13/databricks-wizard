@@ -2,14 +2,14 @@
 
 Databricks Wizard is an enterprise AI data foundation built on Databricks. It ingests supplier data from ERP, procurement, supplier-management and document systems, resolves it into one governed **golden supplier record**, and gives analysts, BI tools and AI agents the same set of trusted, traceable datasets.
 
-The core problem is one every procurement team has: the same supplier appears as `IBM Corp` in SAP, `I.B.M.` in Coupa and `International Business Machines` in federal spend data. Until those records are resolved, spend, risk and performance figures are wrong. Databricks Wizard fixes that at the data layer, then builds analytics and AI on top.
+The core problem is one every procurement team has: the same supplier appears as `ТОВ "АФІНА-КОН"` in a regional SAP company code, `AFINA-KON, LTD` in Coupa and `AFINA-KON, TOV` in the supplier portal. Until those records are resolved, spend, risk and performance figures are wrong. Databricks Wizard fixes that at the data layer, then builds analytics and AI on top.
 
 ## Questions Databricks Wizard answers
 
 | Business question | Answered from |
 |---|---|
 | Which suppliers have deteriorating delivery performance? | `gold.supplier_kpi_monthly` (on-time %, lead-time trend) |
-| Which suppliers have elevated financial or compliance risk? | `gold.supplier_risk_score` (sanctions, SEC filings, certificate expiry, concentration) |
+| Which suppliers have elevated financial or compliance risk? | `gold.supplier_risk_score` (sanctions alerts, certificate expiry from the documents, data quality) |
 | What is our category-level spend concentration? | `gold.spend_concentration` (HHI, top-N share per category) |
 | Which suppliers have incomplete or inconsistent master data? | `gold.supplier_dq_scorecard` and the entity-resolution review queue |
 | What happens if we consolidate spend across selected suppliers? | `simulate_consolidation` MCP tool over gold facts |
@@ -30,7 +30,7 @@ flowchart LR
     HICX --> SHIP
     DOCS --> SHIP
   end
-  PUB[Public data<br/>USAspending · GLEIF · OFAC · SEC EDGAR] --> SHIP
+  PUB[Public data<br/>OFAC SDN · ECB FX rates] --> SHIP
   SHIP -->|Files API| VOL[/UC Volume<br/>bronze.landing/]
   subgraph DBX["Databricks Free Edition · Unity Catalog `wizard`"]
     VOL --> B[Bronze<br/>Auto Loader]
@@ -40,8 +40,8 @@ flowchart LR
     S --> KN[Document chunks]
     KN --> VS[(Vector Search)]
   end
-  G --> GENIE[Genie / AI-BI dashboards]
-  G --> MCP[MCP server<br/>Databricks App]
+  G --> GENIE[Genie · AI/BI dashboard · steward app]
+  G --> MCP[3 MCP servers<br/>Databricks App]
   VS --> MCP
   MCP --> WD[Intelligence WatchDog & other agents]
 ```
@@ -63,11 +63,11 @@ More detail:
 | Platform | Databricks Free Edition (serverless) |
 | Storage & governance | Delta Lake, Unity Catalog (tags, masks, lineage) |
 | Ingestion | Auto Loader, Lakeflow Declarative Pipelines (AUTO CDC) |
-| Entity resolution | Splink on Spark, `databricks-gte-large-en` embeddings, `ai_query()` tie-break |
+| Entity resolution | Splink (DuckDB backend) in a serverless job, `qwen3-embedding-0-6b` name embeddings, Qwen3-Next 80B adjudication of the uncertain band |
 | Orchestration | Lakeflow Jobs |
 | AI retrieval | Mosaic AI Vector Search (Delta Sync) |
-| Models | Databricks foundation model endpoints (Qwen 3.5, Llama 4 Maverick, GPT-OSS, Llama 3.1 8B) |
-| Consumption | Genie, AI/BI dashboards, MCP server on Databricks Apps |
+| Models | Databricks foundation model endpoints, chosen by benchmark ([ADR 0005](docs/adr/0005-model-selection-by-benchmark.md)): Qwen3-Next 80B (ER, agents), Llama 4 Maverick (document extraction), Qwen3 embedding 0.6B |
+| Consumption | Genie, AI/BI dashboard, steward app and MCP servers on Databricks Apps |
 | Delivery | Databricks Asset Bundles, GitHub Actions |
 
 ## Budget
@@ -83,13 +83,14 @@ docker/     local stack: Postgres, Redpanda, Debezium, console, Coupa API
 shipper/    landing shipper: local sources -> UC volume, with manifests (M2)
 pipelines/  Lakeflow pipelines (bronze, silver, gold) and the semantic layer (metric views)
 er/         entity resolution package + Databricks job (M4)
+jobs/       small job tasks (vector index sync)
 dashboards/ AI/BI dashboard definition (M5)
-resources/  Asset Bundle resources (pipeline, ingest job); bundle root is databricks.yml
-scripts/    data download (`make data` → data/raw, not committed)
-docs/       architecture, data model, roadmap, ADRs
+apps/       Databricks Apps: MCP servers (mcp/) and the steward workbench (steward/)
+agents/     agent harness and tool-calling benchmark (M7)
+resources/  Asset Bundle resources (pipeline, ingest job, apps, dashboard); bundle root is databricks.yml
+scripts/    data download, workspace setup, evals and checks
+docs/       write-up, business case, architecture, data model, roadmap, ADRs, case study
 ```
-
-More directories (`sources/`, `pipelines/`, `mcp/`, `bundles/`) are added as each milestone lands.
 
 ## Data sources and attribution
 

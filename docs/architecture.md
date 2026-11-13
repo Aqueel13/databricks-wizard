@@ -90,22 +90,22 @@ Each batch has a manifest, so bronze can reconcile what arrived against what was
 
 ```mermaid
 flowchart LR
-  A[silver.supplier_records<br/>SAP + Coupa + HICX + USAspending + GLEIF] --> N[Normalize<br/>legal suffixes, case, punctuation,<br/>address parsing, tax-ID format]
-  N --> BL[Blocking<br/>tax ID · LEI · name token · country+postcode]
-  BL --> SC[Splink scoring<br/>name Jaro-Winkler, address, tax ID,<br/>bank account hash, embedding cosine]
+  A[silver.supplier_records<br/>SAP + Coupa + HICX] --> N[Normalize<br/>legal forms in 5 languages, transliteration,<br/>phonetic skeleton, national-ID validation]
+  N --> BL[Blocking<br/>national ID · name token · skeleton prefix ·<br/>embedding neighbours]
+  BL --> SC[Splink scoring<br/>name levels, national ID, country,<br/>city, legal form, numbers in name]
   SC -->|p ≥ 0.95| AUTO[Auto-match]
-  SC -->|0.60 ≤ p < 0.95| LLM[LLM adjudication<br/>ai_query, JSON verdict + reason]
-  SC -->|p < 0.60| NOM[No match]
+  SC -->|0.50 ≤ p < 0.95| LLM[LLM adjudication<br/>ai_query, JSON verdict + reason]
+  SC -->|p < 0.50| NOM[No match]
   LLM -->|confident| AUTO
   LLM -->|unsure| RQ[Steward review queue]
-  AUTO --> CL[Connected components → clusters]
+  AUTO --> CL[Union-find with constraints → clusters]
   RQ --> CL
   CL --> SV[Survivorship rules]
   SV --> GOLD[gold.dim_supplier<br/>golden record, SCD2]
 ```
 
-- **Deterministic first.** Exact tax-ID or LEI matches are auto-linked before anything probabilistic runs.
-- **Survivorship** is field-level and documented. Example: legal name comes from GLEIF, then HICX, then SAP. Bank details come only from HICX (verified). Address uses the most recently updated trusted source.
+- **Deterministic first.** Equal valid national IDs, and exact normalized names in the same country with nothing contradicting, are linked before anything probabilistic runs.
+- **Survivorship** is field-level and documented: legal name HICX, then SAP, then Coupa; national ID from validated sources only; the local-script name is kept. Bank details come only from HICX. Every version of the golden record is kept in `gold.dim_supplier_history` (SCD2).
 - **Explainability.** `gold.supplier_match_evidence` stores every link with its score, the comparison levels that fired and, where used, the LLM's reason. The MCP tool `explain_supplier_match` reads from it.
 - Evaluation uses a labelled set generated with the synthetic data (the injected duplicates are known), so precision and recall are measured, not guessed.
 
@@ -192,4 +192,4 @@ Checked against the workspace on 2026-11-13 with `setup/00_capability_check.py`:
 | Tables per schema | **max 100**, and every streaming table / materialized view also creates a hidden `__materialization_…` table, so each pipeline object counts twice | One shared `silver.dq_quarantine` instead of one quarantine table per entity; layers in separate schemas; keep an eye on `information_schema.tables` counts. Removing a table from a pipeline does **not** drop it, and dropping it does **not** drop its hidden `__materialization_…` table; drop both |
 | Compute | Serverless only, Python/SQL only | No Scala; Splink via pip on serverless |
 
-**Still to verify:** outbound internet from serverless (decides whether public data is fetched in Databricks or by the shipper), `ai_parse_document()` availability, metric views availability, and Splink installing on serverless.
+Verified since: `ai_parse_document`, metric views and Splink (DuckDB backend) in a serverless job all work. Public data arrives through the shipper, like every other source, so outbound internet from serverless isn't needed.

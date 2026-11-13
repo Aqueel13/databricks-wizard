@@ -19,6 +19,8 @@ Fully synthetic supplier data looks fake: uniform names, no real addresses, no r
 
 Full list, licences and profiling results: [data-model.md](../data-model.md#external-datasets).
 
+**As built (M1–M8):** USAspending, GLEIF and SEC EDGAR were not used. World Bank awards are the international source, and the generator's answer key is the ground truth for cross-script pairs. The supplier documents are generated (contracts, ISO certificates including scans, W-9-style forms) so that every field is in the answer key; Northwind PDFs were not used. CUAD is kept for a separate clause-extraction benchmark. OFAC addresses and ECB exchange rates were added. The [README](../../README.md#data-sources-and-attribution) lists what is actually used.
+
 ### What the generator does
 
 It doesn't invent most records. It **links and damages** real ones:

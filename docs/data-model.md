@@ -12,12 +12,13 @@ All tables live in the `wizard` catalog. Bronze and silver keep source-system na
 | Coupa mock | Procure-to-pay | `suppliers`, `purchase_orders`, `invoices`, `contracts` | REST, incremental by `updated_at` watermark |
 | HICX mock | Supplier information management | supplier profiles, certifications, bank details, contacts | Weekly Excel/CSV export drop |
 | Documents | Contract and compliance repository | contracts, ISO 9001/14001 certificates, W-9-style tax forms | File drop |
-| USAspending.gov | Real procurement spend | federal contract awards by recipient (UEI, name, address, NAICS) | Bulk download snapshot |
-| GLEIF | Real legal entity reference | LEI, legal name **in local language and script**, transliterated and other names, address, parent relationships | API lookups for in-scope suppliers |
-| OFAC SDN | Real sanctions list | sanctioned entities and aliases (many transliterated from Cyrillic and Arabic) | Snapshot |
-| SEC EDGAR | Real financial signals | company facts (revenue, net income, filings) | API snapshot for listed suppliers |
+| World Bank corporate awards | International indirect-spend vendors | real vendor names and countries | Kaggle snapshot (CC0), replayed through Coupa; optional live snapshot |
+| OFAC SDN | Real sanctions list | sanctioned entities, aliases (many transliterated from Cyrillic and Arabic) and addresses | Snapshot (`sdn.csv`, `alt.csv`, `add.csv`) |
+| ECB reference rates | Real FX rates | daily euro reference rates | Snapshot, aggregated to monthly USD rates |
 | ProZorro (Ukraine) | Regional ERP: Ukrainian operations | real supplier names in **Cyrillic**, EDRPOU company IDs, tender awards (2015–2019) | Kaggle snapshot (CC0), replayed through company code UA01 |
 | Polish public tenders (BZP + TED) | Regional ERP: Polish operations | 81,674 real contractors with **Polish diacritics** and NIP, awards (2024–present) | Kaggle snapshot (CC BY 4.0), replayed through company code PL01 |
+
+The original plan ([ADR 0003](adr/0003-real-public-plus-synthetic-data.md)) also named USAspending, GLEIF and SEC EDGAR. They were not built. World Bank awards took USAspending's place as the international source, and the generator's answer key replaced GLEIF as ground truth for cross-script pairs.
 
 ## Multilingual suppliers
 
@@ -25,12 +26,11 @@ The enterprise has regional operations in **Poland** and **Ukraine**. Their SAP 
 
 | System | Name |
 |---|---|
-| SAP company code UA01 | `ТОВ "Нова Пошта"` |
-| Coupa (group) | `Nova Poshta LLC` |
-| HICX | `NOVA POSHTA, TOV` |
-| GLEIF | legal name in Cyrillic + transliterated name |
+| SAP company code UA01 | `ТОВ "АФІНА-КОН"` |
+| Coupa (group) | `AFINA-KON, LTD` |
+| HICX | `AFINA-KON, TOV` |
 
-Ground truth for cross-script pairs comes from two places: GLEIF records that carry both the local legal name and a transliterated name, and the generator, which writes known variants of each regional supplier into group systems.
+(A real ProZorro supplier, as the generator spread it across systems.) Ground truth for cross-script pairs comes from the generator, which writes known variants of each regional supplier into group systems and records them in the answer key.
 
 Matching problems this adds:
 
@@ -63,19 +63,19 @@ Attribution for every dataset goes in the README.
 
 ## Synthetic data and injected defects
 
-The generator (`sources/wizard_sources/`) produces about 3,200 real-world suppliers (5,600+ source records), 73k SAP POs over 4 years, 22k Coupa POs over 3 years, and about 970 documents. Supplier identities come from the SAP demo vendor master, World Bank awardees, Polish tenders and ProZorro. USAspending, GLEIF and SEC enrichment are planned for later milestones.
+The generator (`sources/wizard_sources/`) produces about 3,560 real-world suppliers (5,221 source records), 73k SAP POs over 4 years, 22k Coupa POs over 3 years, and about 990 documents. Supplier identities come from the SAP demo vendor master, World Bank awardees, Polish tenders and ProZorro. Builds are deterministic: the same inputs give byte-identical output.
 
 Defects are injected on purpose and **recorded in a ground-truth table**, so data-quality and entity-resolution results can be scored:
 
 | Defect | Example | Detected by |
 |---|---|---|
-| Cross-system duplicates | `IBM Corp` (SAP) / `I.B.M.` (Coupa) / `INTERNATIONAL BUSINESS MACHINES CORPORATION` (USAspending) | Entity resolution |
+| Cross-system duplicates | One supplier as an SAP vendor, a Coupa supplier and a HICX profile, each spelled differently | Entity resolution |
 | Within-system duplicates | Two SAP `LIFNR`s for one supplier, created years apart | Entity resolution |
 | Name variants | Legal suffixes, abbreviations, typos, transliterations | Normalization + Splink |
-| Cross-script variants | `ТОВ "Нова Пошта"` (SAP UA01) / `Nova Poshta LLC` (Coupa) / `Nowa Poszta` (bad transliteration) | Multilingual normalization + embeddings + LLM |
+| Cross-script variants | `ТОВ "МЕТАКОН"` (SAP UA01) / `METAKON, LTD` (Coupa), with transliteration standards that differ by system | Multilingual normalization + embeddings + LLM |
 | Invalid national IDs | EDRPOU or NIP with a wrong check digit | Country-specific validation → DQ scorecard |
 | Missing or invalid tax IDs | Blank, wrong format, wrong check digit | Expectations → DQ scorecard |
-| Conflicting addresses | Different postcode in SAP vs HICX | Survivorship + DQ consistency |
+| Conflicting addresses | Different city in HICX than in the other systems | Survivorship + DQ consistency |
 | Delivery drift | A chosen set of suppliers whose on-time rate drops slowly over 9 months | Delivery KPIs |
 | Expiring or expired certificates | ISO cert expired but supplier still active | Doc extraction → risk |
 | Sanctions hits | Synthetic supplier alias close to an OFAC SDN entry | Sanctions screening |
@@ -88,19 +88,17 @@ One streaming table per source entity, all with these metadata columns:
 
 | Column | Description |
 |---|---|
-| `_source` | `sap`, `coupa`, `hicx`, `docs`, `usaspending`, `gleif`, `ofac`, `sec` |
 | `_file` | Landing file path |
 | `_batch_id` | Shipper batch ID (joins to manifest) |
 | `_ingested_at` | Auto Loader ingest timestamp |
 | `_rescued_data` | Columns that didn't match the schema |
 
-Examples: `bronze.sap_lfa1_cdc`, `bronze.sap_ekpo_cdc`, `bronze.coupa_suppliers`, `bronze.hicx_supplier_profiles`, `bronze.docs_binary`, `bronze.usaspending_awards`, `bronze.gleif_lei`, `bronze.ofac_sdn`.
+Examples: `bronze.sap_lfa1_cdc`, `bronze.sap_ekpo_cdc`, `bronze.coupa_suppliers`, `bronze.hicx_supplier_profiles`, `bronze.docs_binary`, `bronze.ofac_sdn`, `bronze.ofac_add`, `bronze.ecb_eurofxref`, plus `bronze.landing_manifests` and `bronze.landing_reconciliation`.
 
 ## Silver
 
 | Table | Grain | Notes |
 |---|---|---|
-| `silver.supplier_records` | one row per source supplier record | Union of SAP/Coupa/HICX/USAspending/GLEIF in a canonical schema: `source`, `source_id`, `legal_name`, `name_norm`, `tax_id`, `lei`, `duns_like`, `address_*`, `country`, `bank_account_hash`, `updated_at` |
 | `silver.sap_vendor` | LIFNR, SCD2 | From `AUTO CDC` |
 | `silver.purchase_order_line` | PO line | SAP `EKKO`+`EKPO` and Coupa POs, conformed |
 | `silver.goods_receipt` | receipt event | From `EKBE` (movement type GR) and Coupa receipts |

@@ -8,6 +8,8 @@ Supplier records from five sources have to be resolved into one golden record. N
 
 ## Decision
 
+The plan as accepted is below. What was built differs in places: Splink runs on its DuckDB backend inside a serverless job, there are no LEI, UEI or bank-account comparisons (those sources weren't built), the LLM band is 0.50–0.95, and clustering uses union-find with constraints. See [Implementation notes](#implementation-notes-m4-2026-11-13).
+
 Resolve in layers, cheapest and most certain first:
 
 0. **Multilingual normalization:** every name keeps its original form and also gets
