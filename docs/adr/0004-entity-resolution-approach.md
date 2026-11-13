@@ -1,0 +1,32 @@
+# 0004: Layered entity resolution
+
+**Status:** Accepted · 2026-11-13
+
+## Context
+
+Supplier records from five sources have to be resolved into one golden record. Name matching alone fails: legal suffixes vary, abbreviations are common, and different companies can have nearly identical names. The method has to be explainable to data stewards and auditors, and cheap enough for Free Edition.
+
+## Decision
+
+Resolve in layers, cheapest and most certain first:
+
+1. **Deterministic:** exact match on normalized tax ID, LEI or UEI links records immediately.
+2. **Probabilistic:** **Splink** (Fellegi–Sunter) on Spark, with blocking rules (tax ID, LEI, name token, country + postcode) and comparisons on name (Jaro-Winkler), address, tax ID, bank-account hash, and embedding cosine similarity of the name (`databricks-gte-large-en`, with `qwen3-embedding-0-6b` tested for non-English names).
+3. **LLM adjudication:** pairs with probability 0.60–0.95 go to `ai_query()`. The model returns a JSON verdict (`match` / `no_match` / `unsure`) with a reason. The prompt version and model are logged.
+4. **Steward review:** `unsure` verdicts go to a review queue. Steward decisions are stored and override every other layer.
+5. **Clustering and survivorship:** connected components form clusters. Field-level survivorship rules build `gold.dim_supplier`.
+
+Thresholds are tuned against ground truth and stored in `ops.er_config` (versioned).
+
+## Alternatives considered
+
+- **LLM for all pairs.** Expensive, slow, not repeatable, and a poor fit for Free Edition quotas.
+- **Commercial MDM (Informatica, Reltio, Tamr).** The usual enterprise answer, and noted as such in the write-up, but it costs money and hides the logic the project is meant to show.
+- **Pure embedding similarity.** Fails on short names and on look-alike companies.
+
+## Consequences
+
+- Every link has evidence (method, score, comparison levels, LLM reason) in `gold.supplier_match_evidence`.
+- The LLM runs on only a small share of pairs, keeping cost and latency low.
+- Splink must install on serverless compute (pip). This is verified in M4. Fallback: run Splink with its DuckDB backend in a job, then write the results back to Delta.
+- Precision, recall and F1 are tracked per run in `ops.er_eval`.
