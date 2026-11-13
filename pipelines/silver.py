@@ -349,8 +349,8 @@ def dq_findings():
         F.lit("hicx").alias("source"), F.col("certificate_number").alias("source_id"),
         F.lit("certification").alias("entity"), F.lit("expired_certificate").alias("rule"),
         F.lit("warn").alias("severity"),
-        F.format_string("%s expired %s; supplier %s still approved", "certificate_type", "expiry_date",
-                        "hicx_id").alias("detail")))
+        F.format_string("%s expired %s; supplier %s still approved", "certificate_type",
+                        F.col("expiry_date").cast("string"), "hicx_id").alias("detail")))  # %s on a date = day number
     keys = (spark.read.table(f"{B}.coupa_suppliers")  # noqa: F821
             .select(F.explode(F.expr("json_object_keys(to_json(payload))")).alias("field"), "updated_at")
             .where(~F.col("field").isin(EXPECTED_COUPA_SUPPLIER_FIELDS))

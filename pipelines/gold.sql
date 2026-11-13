@@ -118,9 +118,11 @@ AS
 SELECT supplier_id, doc_type, doc_key, file_name,
        CASE WHEN doc_type = 'certificate' THEN 'certificate_metadata_mismatch' ELSE 'contract_metadata_mismatch' END AS rule,
        CASE WHEN doc_type = 'certificate'
-            THEN format_string('document expiry %s vs HICX %s', end_date, system_expiry_date)
-            ELSE format_string('document value %s %s / end %s vs Coupa %s / %s', currency, contract_value, end_date,
-                               system_contract_value, system_end_date) END AS detail
+            -- dates cast explicitly: format_string('%s', <date>) renders days since 1970
+            THEN format_string('document expiry %s vs HICX %s', cast(end_date AS STRING), cast(system_expiry_date AS STRING))
+            ELSE format_string('document value %s %s / end %s vs Coupa %s / %s', currency, cast(contract_value AS STRING),
+                               cast(end_date AS STRING), cast(system_contract_value AS STRING),
+                               cast(system_end_date AS STRING)) END AS detail
 FROM supplier_documents WHERE metadata_mismatch;
 
 -- ===================================================================== KPIs
