@@ -107,6 +107,16 @@ def _ofac(name: str, file: str):
 
 _ofac("sdn", "sdn.csv")
 _ofac("alt", "alt.csv")
+_ofac("add", "add.csv")
+
+
+@dlt.table(table_properties=BRONZE, comment="ECB euro foreign exchange reference rates: one row per day, one column "
+                                            "per currency (units per EUR, 'N/A' when not published).")
+def ecb_eurofxref():
+    df = _autoloader("csv", f"{LANDING}/public/ecb", header="true", pathGlobFilter="eurofxref-hist.csv",
+                     **{"cloudFiles.inferColumnTypes": "false", "cloudFiles.schemaEvolutionMode": "none"})
+    return (_meta(df).select("Date", "USD", "PLN", "_file", "_batch_id", "_ingested_at")
+            .withColumn("snapshot_date", F.regexp_extract("_file", r"/ecb/([^/]+)/", 1)))
 
 
 # ------------------------------------------------------------------ manifests + reconciliation
@@ -121,7 +131,8 @@ def landing_manifests():
 
 _LOADED = (
     [f"sap_{t}_cdc" for t in SAP_TABLES] + [f"coupa_{e}" for e in COUPA_ENTITIES]
-    + ["hicx_bank_details", "hicx_certifications", "hicx_supplier_exports", "docs_binary", "ofac_sdn", "ofac_alt"]
+    + ["hicx_bank_details", "hicx_certifications", "hicx_supplier_exports", "docs_binary", "ofac_sdn", "ofac_alt", "ofac_add",
+       "ecb_eurofxref"]
 )
 
 

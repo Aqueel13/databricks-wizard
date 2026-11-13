@@ -49,6 +49,9 @@ ALTER MATERIALIZED VIEW wizard.gold.supplier_360 ALTER COLUMN national_id SET MA
 -- ------------------------------------------------------------------ tags
 ALTER TABLE wizard.gold.dim_supplier SET TAGS ('layer' = 'gold', 'data_owner' = 'procurement', 'contains_pii' = 'true', 'certified' = 'true');
 ALTER TABLE wizard.gold.dim_supplier ALTER COLUMN national_id SET TAGS ('pii' = 'national_id');
+ALTER TABLE wizard.gold.dim_supplier_history ALTER COLUMN national_id SET MASK wizard.ops.mask_national_id;
+ALTER TABLE wizard.gold.dim_supplier_history SET TAGS ('layer' = 'gold', 'data_owner' = 'procurement', 'contains_pii' = 'true', 'certified' = 'false');
+ALTER TABLE wizard.gold.dim_supplier_history ALTER COLUMN national_id SET TAGS ('pii' = 'national_id');
 ALTER TABLE wizard.gold.supplier_source_xref ALTER COLUMN national_id SET TAGS ('pii' = 'national_id');
 ALTER MATERIALIZED VIEW wizard.gold.supplier_360 SET TAGS ('layer' = 'gold', 'data_owner' = 'procurement', 'contains_pii' = 'true', 'certified' = 'true');
 ALTER MATERIALIZED VIEW wizard.gold.supplier_360 ALTER COLUMN national_id SET TAGS ('pii' = 'national_id');

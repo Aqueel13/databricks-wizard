@@ -14,6 +14,23 @@ tab_match, tab_alerts, tab_agent, tab_log = st.tabs(["Match review", "Sanctions 
                                                      "Decisions and apply"])
 
 
+PAGE = 25
+
+
+def paged(df, key: str, cols: list[str]):
+    """Filter (substring over cols) and page a queue; returns the rows to render."""
+    f, pg = st.columns([3, 1])
+    needle = f.text_input("Filter", key=f"{key}_filter", placeholder="name, ID, country or reason")
+    if needle:
+        hay = df[cols].astype(str).agg(" ".join, axis=1).str.lower()
+        df = df[hay.str.contains(needle.lower(), regex=False)]
+    pages = max(1, -(-len(df) // PAGE))
+    page = pg.number_input(f"Page (of {pages})", min_value=1, max_value=pages, value=1, key=f"{key}_page")
+    st.caption(f"{len(df)} matching · showing {(page - 1) * PAGE + 1 if len(df) else 0}-"
+               f"{min(page * PAGE, len(df))}")
+    return df.iloc[(page - 1) * PAGE: page * PAGE]
+
+
 def fmt(name, local, country, city, id_type, nid):
     lines = [f"**{name}**"]
     if local:
@@ -28,7 +45,8 @@ with tab_match:
     st.subheader(f"{len(q)} pairs waiting for a decision")
     st.write("Pairs the matcher could not settle: the LLM was unsure, or a link was refused because it would merge "
              "records with conflicting facts.")
-    for _, r in q.head(25).iterrows():
+    for _, r in paged(q, "match", ["pair_key", "reason", "l_name", "r_name", "l_local", "r_local", "l_id",
+                                   "r_id", "l_country", "r_country"]).iterrows():
         with st.container(border=True):
             st.markdown(f"`{r.pair_key}` · probability **{r.match_probability:.2f}** · {r.reason}")
             a, b = st.columns(2)
@@ -50,7 +68,8 @@ with tab_alerts:
     st.subheader(f"{len(al)} open screening alerts")
     st.warning("An alert is a NAME SIMILARITY with an OFAC sanctions list entry. It is not a finding. Confirm only "
                "with corroborating evidence (address, registration, ownership).")
-    for i, r in al.head(25).iterrows():
+    for i, r in paged(al, "alerts", ["legal_name", "legal_name_local", "sanctioned_name", "screened_name",
+                                     "country", "program"]).iterrows():
         with st.container(border=True):
             a, b = st.columns(2)
             a.markdown("**Supplier**  \n" + fmt(r.legal_name, r.legal_name_local, r.country, r.city,

@@ -16,6 +16,7 @@ import json
 import random
 import re
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import duckdb
 
@@ -154,7 +155,7 @@ class Builder:
 
     # ------------------------------------------------------------ 2-5. external suppliers
     def worldbank(self) -> list[dict]:
-        src = f"read_csv('{C.RAW / 'worldbank_awards/corporate-procurement-contract-awards.csv'}', header=true)"
+        src = f"read_csv('{C.WORLDBANK_SNAPSHOT}', header=true, all_varchar=true)"
         rows = self.db.sql(f"""
             with r as (select Supplier, "Supplier Country Code" cc, "Commodity Category" cat from {src}
                        where Supplier is not null)
@@ -234,8 +235,11 @@ class Builder:
             cc = self.rng.choice(["US", "US", "NL", "DE", "PL"])
             story = None
             if sdn and i < 6:
-                # near-match to a real sanctioned entity: only ever on fictional suppliers (ADR 0003)
-                base = sdn[i]
+                # near-match to a real sanctioned entity: only ever on fictional suppliers (ADR 0003). The supplier
+                # sits in the entity's own country (OFAC address), as a sanctioned party trading under a misspelt
+                # name would; screening's country corroboration must not be able to clear it.
+                base, sdn_cc = sdn[i]
+                cc = sdn_cc or cc
                 name = T.typo(T.title(base), self.rng)
                 story = f"sanctions_near_match:{base}"
             elif i < 6 + C.N_DRIFT_SUPPLIERS // 3:
@@ -251,15 +255,25 @@ class Builder:
                             s["storyline"].split(":", 1)[1], s["canonical_name"])
         return out
 
-    def _sdn_entities(self) -> list[str]:
+    def _sdn_entities(self) -> list[tuple[str, str | None]]:
+        """Six sanctioned entities to plant near-matches of: (name, ISO country of their first OFAC address)."""
         f = C.RAW / "ofac/sdn.csv"
         if not f.exists():
             return []
         rows = self.db.sql(f"""
-            select column01 from read_csv('{f}', header=false, all_varchar=true, quote='"', null_padding=true)
+            select column00, column01 from read_csv('{f}', header=false, all_varchar=true, quote='"', null_padding=true)
             where column02 = '-0- ' or column02 = '-0-'
             order by hash(column01 || '{C.SEED}'), column01 limit 50""").fetchall()
-        return [r[0].strip() for r in rows if r[0] and 8 < len(r[0]) < 40][:6]
+        countries: dict[str, str] = {}
+        add = C.RAW / "ofac/add.csv"
+        if add.exists():
+            iso = json.loads((Path(__file__).resolve().parents[2] / "er/wizard_er/ofac_countries.json").read_text())
+            for ent, country in self.db.sql(f"""
+                    select column0, trim(column4) from read_csv('{add}', header=false, all_varchar=true, quote='"', null_padding=true)
+                    order by column0, try_cast(column1 as int)""").fetchall():
+                if ent and ent.strip() not in countries and country in iso:
+                    countries[ent.strip()] = iso[country]
+        return [(r[1].strip(), countries.get(r[0].strip())) for r in rows if r[1] and 8 < len(r[1].strip()) < 40][:6]
 
     # ------------------------------------------------------------ placement
     def place_sap(self, s: dict, bukrs: str) -> str:

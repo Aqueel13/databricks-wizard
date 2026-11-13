@@ -75,13 +75,20 @@ kaggle_all   supply_chain     ayodejiibrahimlateef/supply-chain-datasets        
 kaggle_all   olist            olistbr/brazilian-ecommerce                          # CC BY-NC-SA 4.0
 url          cuad https://zenodo.org/records/4595826/files/CUAD_v1.zip CUAD_v1.zip  # CC BY 4.0
 
-# --- OFAC SDN list + aliases (US public domain)
-if [[ ! -f "$RAW/ofac/.done" ]]; then
-  mkdir -p "$RAW/ofac"; log "ofac: sdn.csv, alt.csv"
-  curl -fsSL -o "$RAW/ofac/sdn.csv" https://www.treasury.gov/ofac/downloads/sdn.csv
-  curl -fsSL -o "$RAW/ofac/alt.csv" https://www.treasury.gov/ofac/downloads/alt.csv
-  touch "$RAW/ofac/.done"
-else log "skip ofac (done)"; fi
+# --- OFAC SDN list, aliases and addresses (US public domain)
+mkdir -p "$RAW/ofac"
+for f in sdn alt add; do
+  if [[ ! -f "$RAW/ofac/$f.csv" ]]; then log "ofac: $f.csv"; curl -fsSL -o "$RAW/ofac/$f.csv" "https://www.treasury.gov/ofac/downloads/$f.csv"
+  else log "skip ofac $f.csv (present)"; fi
+done
+
+# --- ECB euro foreign exchange reference rates, daily since 1999 (free reuse with source acknowledged)
+if [[ ! -f "$RAW/ecb/.done" ]]; then
+  mkdir -p "$RAW/ecb"; log "ecb: eurofxref-hist"
+  curl -fsSL -o "$RAW/ecb/eurofxref-hist.zip" https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.zip
+  unzip -o -q "$RAW/ecb/eurofxref-hist.zip" -d "$RAW/ecb" && rm "$RAW/ecb/eurofxref-hist.zip"
+  touch "$RAW/ecb/.done"
+else log "skip ecb (done)"; fi
 
 # --- Manifest
 log "writing manifest"

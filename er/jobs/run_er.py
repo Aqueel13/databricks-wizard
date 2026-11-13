@@ -26,7 +26,7 @@ from wizard_er.adjudicate import MODEL, PROMPT_VERSION, adjudicate  # noqa: E402
 from wizard_er.cluster import cluster, decide  # noqa: E402
 from wizard_er.evaluate import pairwise  # noqa: E402
 from wizard_er.matching import prepare, score  # noqa: E402
-from wizard_er.screening import screen  # noqa: E402
+from wizard_er.screening import corroborate, screen, sdn_countries  # noqa: E402
 
 spark = SparkSession.builder.getOrCreate()
 CAT = os.environ.get("WIZARD_CATALOG", "wizard")
@@ -164,6 +164,28 @@ for sid, g in df.groupby("supplier_id"):
         purchasing_blocked=bool((g["status"] == "blocked").any()),
     ))
 save(pd.DataFrame(rows), "gold.dim_supplier", derived_from=[("silver.er_clusters", ["supplier_id"]), ("silver.supplier_records", None)])
+
+# SCD2 history of the golden record: a new version whenever a tracked attribute changes (survivorship picked a
+# different name, an ID was corrected, a source joined or left, a block was set...). Suppliers that disappear
+# (merged into another cluster) get their current version closed. dim_supplier stays the current-state view.
+TRACKED = ["legal_name", "legal_name_local", "national_id", "national_id_type", "country", "city", "legal_form",
+           "source_systems", "purchasing_blocked"]
+spark.sql(f"""CREATE TABLE IF NOT EXISTS {table('gold.dim_supplier_history')} (
+    supplier_id STRING, legal_name STRING, legal_name_local STRING, national_id STRING, national_id_type STRING,
+    country STRING, city STRING, legal_form STRING, source_systems ARRAY<STRING>, purchasing_blocked BOOLEAN,
+    attr_hash STRING, valid_from TIMESTAMP, valid_to TIMESTAMP, is_current BOOLEAN, er_run_id STRING)
+  COMMENT 'SCD type 2 history of the golden supplier record (one row per version; is_current marks the live one).'""")
+cols = ", ".join(TRACKED)
+spark.sql(f"""CREATE OR REPLACE TEMP VIEW _dim_now AS
+    SELECT {cols}, supplier_id, sha2(to_json(struct({cols})), 256) AS attr_hash FROM {table('gold.dim_supplier')}""")
+spark.sql(f"""MERGE INTO {table('gold.dim_supplier_history')} h USING _dim_now n
+    ON h.supplier_id = n.supplier_id AND h.is_current
+    WHEN MATCHED AND h.attr_hash <> n.attr_hash THEN UPDATE SET valid_to = current_timestamp(), is_current = false
+    WHEN NOT MATCHED BY SOURCE AND h.is_current THEN UPDATE SET valid_to = current_timestamp(), is_current = false""")
+spark.sql(f"""INSERT INTO {table('gold.dim_supplier_history')}
+    SELECT n.supplier_id, {", ".join("n." + c for c in TRACKED)}, n.attr_hash, current_timestamp(), NULL, true, '{RUN_ID}'
+    FROM _dim_now n LEFT ANTI JOIN {table('gold.dim_supplier_history')} h
+      ON h.supplier_id = n.supplier_id AND h.is_current""")
 save(df[["supplier_id", "source", "source_id", "unique_id", "name", "country", "national_id"]]
      .merge(linked.groupby("unique_id_l")["method"].first().rename("match_method"), left_on="unique_id",
             right_index=True, how="left"), "gold.supplier_source_xref",
@@ -183,6 +205,9 @@ golden = pd.DataFrame(rows)
 sanctions = spark.table(table("silver.sanctions_names")).select(
     "ent_num", "name", "name_type", "program", "sdn_type").toPandas()
 hits = screen(golden, sanctions)
+# country corroboration from OFAC addresses (bronze.ofac_add: _c0 ent_num, _c4 country)
+addr = spark.table(table("bronze.ofac_add")).selectExpr("cast(_c0 AS BIGINT) ent_num", "trim(_c4) country").toPandas()
+hits = corroborate(hits, dict(zip(golden["supplier_id"], golden["country"])), sdn_countries(addr))
 # steward verdicts on alerts (latest per supplier + sanctioned entity): confirmed / dismissed; otherwise open
 spark.sql(f"""CREATE TABLE IF NOT EXISTS {table('silver.sanctions_alert_decisions')}
               (supplier_id STRING, ent_num BIGINT, decision STRING, steward STRING, note STRING,
@@ -190,11 +215,13 @@ spark.sql(f"""CREATE TABLE IF NOT EXISTS {table('silver.sanctions_alert_decision
 dec = spark.sql(f"""SELECT supplier_id, ent_num, decision FROM {table('silver.sanctions_alert_decisions')}
                     QUALIFY row_number() OVER (PARTITION BY supplier_id, ent_num ORDER BY decided_at DESC) = 1""").toPandas()
 verdict_of = {(a, int(b)): c for a, b, c in zip(dec["supplier_id"], dec["ent_num"], dec["decision"])}
-hits["status"] = [{"confirm": "confirmed", "dismiss": "dismissed"}.get(verdict_of.get((a, int(b))), "open")
-                  for a, b in zip(hits["supplier_id"], hits["ent_num"])]
+# a steward's verdict wins; otherwise the country rule decides open vs auto_cleared
+hits["status"] = [{"confirm": "confirmed", "dismiss": "dismissed"}.get(verdict_of.get((a, int(b))), r)
+                  for a, b, r in zip(hits["supplier_id"], hits["ent_num"], hits["rule_status"])]
+hits = hits.drop(columns=["rule_status"])
 save(hits, "gold.supplier_sanctions_hits",
      derived_from=[("gold.dim_supplier", ["supplier_id"]), ("silver.sanctions_names", ["ent_num"]),
-                   ("silver.sanctions_alert_decisions", None)])
+                   ("bronze.ofac_add", None), ("silver.sanctions_alert_decisions", None)])
 
 # city consistency within each supplier (only possible after entity resolution). Compare spellings, not the
 # phonetic skeleton used for matching (which deliberately hides "Kyiv" vs "Kyyiv"). The record that differs from

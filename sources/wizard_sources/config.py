@@ -15,6 +15,11 @@ SEED = int(os.environ.get("WIZARD_SEED", "42"))
 # malformed strings. v1 data was built with this off; set WIZARD_EIN_FORMAT_DEFECTS=0 to get the v1 behaviour.
 EIN_FORMAT_DEFECTS = os.environ.get("WIZARD_EIN_FORMAT_DEFECTS", "1") == "1"
 
+# World Bank awards: the pinned 2021 Kaggle snapshot by default (reproducible builds). A live Finances One snapshot
+# (scripts/fetch_worldbank_live.py) can be used instead by pointing this at it.
+WORLDBANK_SNAPSHOT = Path(os.environ.get("WIZARD_WORLDBANK_SNAPSHOT")
+                          or RAW / "worldbank_awards/corporate-procurement-contract-awards.csv")
+
 # Fictional enterprise
 ENTERPRISE = "Larkspur Foods"
 COMPANY_CODES = {

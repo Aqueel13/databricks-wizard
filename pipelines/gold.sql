@@ -4,8 +4,17 @@
 
 -- ===================================================================== reference
 CREATE OR REFRESH MATERIALIZED VIEW dim_fx
-COMMENT 'Static FX rates to USD (simplification; SAP TCURR parsing is a later improvement).'
-AS SELECT * FROM VALUES ('USD', 1.0), ('EUR', 1.08), ('PLN', 0.2512), ('UAH', 0.0240) AS fx(currency, usd_per_unit);
+COMMENT 'Monthly average FX rates to USD from ECB euro reference rates (usd_per_unit = USD per EUR / currency per EUR). UAH is not published by the ECB and uses a fixed rate (source = static). SAP TCURR in the demo extract covers 2006-2010 only, so it is not used.'
+AS
+WITH d AS (
+  SELECT DISTINCT to_date(Date) AS d, try_cast(USD AS DOUBLE) AS usd, try_cast(PLN AS DOUBLE) AS pln
+  FROM ${catalog}.bronze.ecb_eurofxref WHERE try_cast(USD AS DOUBLE) IS NOT NULL
+),
+m AS (SELECT date_trunc('month', d) AS month, avg(usd) AS usd_per_eur, avg(usd / pln) AS usd_per_pln FROM d GROUP BY 1)
+SELECT month, 'USD' AS currency, 1.0 AS usd_per_unit, 'ecb' AS source FROM m
+UNION ALL SELECT month, 'EUR', round(usd_per_eur, 6), 'ecb' FROM m
+UNION ALL SELECT month, 'PLN', round(usd_per_pln, 6), 'ecb' FROM m WHERE usd_per_pln IS NOT NULL
+UNION ALL SELECT month, 'UAH', 0.0240, 'static' FROM m;
 
 CREATE OR REFRESH MATERIALIZED VIEW dim_category
 COMMENT 'Spend categories: direct ingredients (SAP material groups) and the five indirect categories (Coupa).'
@@ -39,7 +48,7 @@ coupa AS (
 SELECT x.*, c.supplier_id, round(x.amount_local * fx.usd_per_unit, 2) AS amount_usd
 FROM (SELECT * FROM sap UNION ALL SELECT * FROM coupa) x
 LEFT JOIN ${catalog}.silver.er_clusters c ON c.source = x.source AND c.source_id = x.source_supplier_id
-LEFT JOIN dim_fx fx ON fx.currency = x.currency;
+LEFT JOIN dim_fx fx ON fx.currency = x.currency AND fx.month = date_trunc('month', x.order_date);
 
 CREATE OR REFRESH MATERIALIZED VIEW fact_delivery
 COMMENT 'One row per received PO line: promised vs first receipt date. days_late > 0 means late.'
@@ -75,7 +84,7 @@ WITH x AS (
 )
 SELECT x.*, c.supplier_id, round(x.amount_local * fx.usd_per_unit, 2) AS amount_usd
 FROM x LEFT JOIN ${catalog}.silver.er_clusters c ON c.source = x.source AND c.source_id = x.source_supplier_id
-LEFT JOIN dim_fx fx ON fx.currency = x.currency;
+LEFT JOIN dim_fx fx ON fx.currency = x.currency AND fx.month = date_trunc('month', x.invoice_date);
 
 
 -- ===================================================================== documents

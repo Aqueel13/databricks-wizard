@@ -175,18 +175,23 @@ def ship_docs(sink: Sink, state: State) -> dict | None:
     return m
 
 
-def ship_public(sink: Sink, state: State) -> dict | None:
-    batch = Batch("public", "ofac")
-    for name in ("sdn.csv", "alt.csv"):
-        f = ROOT / "data" / "raw" / "ofac" / name
-        if not f.exists():
-            continue
-        sha = _sha(f)
-        if state.shipped_sha(f"ofac/{name}") == sha:
-            continue
-        snap = datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d")
-        data = f.read_bytes()
-        records = sum(1 for ln in data.decode("utf-8", "replace").splitlines() if re.match(r"^\d", ln))
-        batch.add(sink, f"public/ofac/{snap}/{name}", data, records)
-        state.mark_shipped(f"ofac/{name}", sha)
-    return batch.close(sink, state)
+def ship_public(sink: Sink, state: State) -> list[dict]:
+    """Public reference snapshots: OFAC SDN + aliases + addresses, ECB euro FX reference rates. Shipped when they change."""
+    out = []
+    for entity, folder, names in (("ofac", "ofac", ("sdn.csv", "alt.csv", "add.csv")), ("ecb", "ecb", ("eurofxref-hist.csv",))):
+        batch = Batch("public", entity)
+        for name in names:
+            f = ROOT / "data" / "raw" / folder / name
+            if not f.exists():
+                continue
+            sha = _sha(f)
+            if state.shipped_sha(f"{folder}/{name}") == sha:
+                continue
+            snap = datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d")
+            data = f.read_bytes()
+            records = sum(1 for ln in data.decode("utf-8", "replace").splitlines() if re.match(r"^\d", ln))
+            batch.add(sink, f"public/{folder}/{snap}/{name}", data, records)
+            state.mark_shipped(f"{folder}/{name}", sha)
+        if (m := batch.close(sink, state)):
+            out.append(m)
+    return out

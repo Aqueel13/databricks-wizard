@@ -178,6 +178,18 @@ def cases() -> list[dict]:
     pl = sql("""select legal_name from wizard.gold.supplier_360 where country = 'PL' and size(dq_issues) > 0
                 order by dq_score asc nulls last, legal_name limit 1""")[0]
     q = sql("select count(*) n from wizard.silver.er_review_queue")[0]
+    # document cases come from the answer key, so they hold for any generator build
+    gt = "/Volumes/wizard/ops/ground_truth"
+    cert = sql(f"""select entity_key k, original_value hicx, injected_value doc
+                   from parquet.`{gt}/gt_defect.parquet` where defect_type = 'certificate_metadata_mismatch'
+                     and field = 'expiry_date' order by entity_key limit 1""")[0]
+    ctr = sql(f"""select doc_key k, governing_law law from parquet.`{gt}/gt_document.parquet`
+                  where doc_type = 'contract' and governing_law is not null order by doc_key limit 1""")[0]
+    law = re.sub(r"^the (state|commonwealth|province) of ", "", ctr["law"].lower())
+    # sanctions policy: a supplier with an OPEN screening alert (name similarity, not confirmed). Chosen at run
+    # time so no real company's name is written next to a sanctions question in the repository.
+    alert = sql("""select legal_name from wizard.gold.supplier_360 where sanctions_alerts > 0 and sanctions_confirmed = 0
+                   order by supplier_id limit 1""")[0]
     return [
         dict(id="deteriorating_list", tools={"find_suppliers"},
              q="Which suppliers have deteriorating delivery performance? Name the one with the largest drop.",
@@ -192,10 +204,10 @@ def cases() -> list[dict]:
              q=f"Why were the source records of supplier {three['supplier_id']} ({three['legal_name']}) merged into one supplier?",
              check=lambda a: any(k in a.lower() for k in ("national id", "edrpou", "deterministic", "same id", "identifier"))),
         dict(id="certificate_vs_system", tools={"get_document", "answer_document_question", "search_documents"},
-             q="When does certificate ISO-397951 expire according to the certificate itself, and what does HICX say?",
-             check=lambda a: has(a, "2026-06-19") and has(a, "2026-12-16")),
+             q=f"When does certificate {cert['k']} expire according to the certificate itself, and what does HICX say?",
+             check=lambda a: has(a, cert["doc"]) and has(a, cert["hicx"])),
         dict(id="contract_clause", tools={"answer_document_question", "search_documents", "get_document"},
-             q="Which law governs agreement CTR-00160?", check=lambda a: has(a, "illinois")),
+             q=f"Which law governs agreement {ctr['k']}?", check=lambda a: has(a, law)),
         dict(id="concentration", tools={"get_spend_concentration"},
              q="Which spend category is the most concentrated in the last 12 months, and what is its HHI?",
              check=lambda a: has(a, conc["category_name"]) and has(a, str(int(float(conc["hhi"]))))),
@@ -213,7 +225,7 @@ def cases() -> list[dict]:
              q="Which Polish supplier has the worst master data quality, and what are its issues?",
              check=lambda a: has(a, pl["legal_name"][:12])),
         dict(id="sanctions_policy", tools={"search_suppliers", "get_supplier_360", "find_suppliers"},
-             q="Is the supplier Tropicana Sp. z o.o. sanctioned?",
+             q=f"Is the supplier {alert['legal_name']} sanctioned?",
              check=lambda a: any(k in a.lower() for k in ("pending", "not confirmed", "alert", "not been confirmed",
                                                           "name similarity", "review"))
              and not re.search(r"\bis (a )?sanctioned\b", a.lower().replace("not sanctioned", ""))),
