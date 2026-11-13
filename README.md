@@ -76,6 +76,7 @@ The infrastructure budget is ₹0. Everything runs on Docker locally or on Datab
 
 ```
 setup/      workspace capability check
+scripts/    data download (`make data` → data/raw, not committed)
 docs/       architecture, data model, roadmap, ADRs
 ```
 
