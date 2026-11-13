@@ -92,8 +92,10 @@ def load() -> None:
     sup = [dict(zip(rel.columns, r)) for r in rel.fetchall()]
 
     suppliers, pos, lines, receipts, invoices, contracts, defects = [], [], [], [], [], [], []
+    # nothing in the history may be later than its end, or incremental watermarks jump past live changes
+    end_ts = datetime.combine(C.HISTORY_END, datetime.min.time()) + timedelta(hours=23)
     for s in sup:
-        upd = s["updated_at"]
+        upd = min(s["updated_at"], end_ts)
         suppliers.append(dict(id=s["id"], number=s["number"], name=s["name"], display_name=s["display_name"],
                               tax_id=s["tax_id"], country=s["country"], city=s["city"], commodity=s["category"],
                               status=s["status"],
@@ -171,8 +173,8 @@ def load() -> None:
             invoices.append(inv)
             inv_id += 1
             if r > 0.99:  # same invoice submitted twice
-                invoices.append(dict(inv, id=inv_id, created_at=its + timedelta(days=9), updated_at=its + timedelta(days=9),
-                                     status="approved"))
+                dts = min(its + timedelta(days=9), end_ts)
+                invoices.append(dict(inv, id=inv_id, created_at=dts, updated_at=dts, status="approved"))
                 defects.append(("duplicate_invoice", f"INV-{inv_id}", inv["invoice_number"], inv["invoice_number"]))
                 inv_id += 1
 

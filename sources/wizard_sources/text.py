@@ -210,7 +210,12 @@ def edrpou_valid(code: str) -> bool:
 
 
 def corrupt_check_digit(code: str, rng: random.Random) -> str:
-    """Change the last digit so the checksum fails (recorded as an injected defect)."""
+    """Make the ID fail validation (recorded as an injected defect).
+
+    Checksummed IDs (NIP, EDRPOU) get a wrong check digit. A US EIN has no check digit, so changing
+    a digit would be undetectable; it gets a format error instead (one digit dropped)."""
+    if re.fullmatch(r"\d{2}-\d{7}", code):
+        return code[:-1]
     last = code[-1]
     new = rng.choice([c for c in string.digits if c != last])
     return code[:-1] + new

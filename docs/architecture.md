@@ -76,14 +76,14 @@ Each batch has a manifest, so bronze can reconcile what arrived against what was
 | Layer | Contract | Built with |
 |---|---|---|
 | **Bronze** | Append-only, schema-on-read, plus ingest metadata (`_file`, `_batch_id`, `_ingested_at`). Never edited. SAP CDC events and Coupa records are stored whole as `VARIANT` (`payload`), so upstream schema changes never break ingestion; CSVs land as string columns, xlsx and PDFs as binary. | Auto Loader streaming tables in a Lakeflow Declarative Pipeline (`pipelines/bronze.py`) |
-| **Silver** | Typed, deduplicated, conformed to a canonical model. CDC applied. Bad rows quarantined, not dropped. | `AUTO CDC` (SCD1 for transactions, SCD2 for vendor master), expectations, quarantine tables |
+| **Silver** | Typed, deduplicated, conformed to a canonical model. CDC applied in sequence order (source LSN, Kafka offset), so late and out-of-order events land correctly. Bad rows quarantined, not dropped. | `AUTO CDC` (SCD1 for transactions, SCD2 for vendor master), hard rules → `dq_quarantine`, soft rules → `dq_findings` / `dq_summary` (`pipelines/silver.py`) |
 | **Entity resolution** | Clusters of source records that refer to one real supplier, with match scores and explanations. | Splink (Fellegi–Sunter) + embedding similarity + `ai_query()` for the uncertain middle band |
 | **Gold** | Business-ready, keyed on `supplier_id`. Facts, dimensions, KPIs, risk. | Materialized views / jobs |
 
 ### Data-quality approach
 
 - **Expectations** in pipelines: `expect` (warn), `expect_or_drop` (send to quarantine), `expect_or_fail` (for broken contracts, e.g. a manifest count mismatch).
-- **Quarantine tables** (`silver._quarantine_<entity>`) keep rejected rows and the rule that rejected them, so the data steward has something to act on.
+- **Quarantine** (`silver.dq_quarantine`, one shared table fed by an append flow per entity) keeps rejected rows as JSON with the rules they failed, so the data steward has something to act on. One table instead of one per entity keeps silver inside the Free Edition table quota.
 - **DQ scorecard** (`gold.supplier_dq_scorecard`): completeness, validity and consistency per supplier and per source. This feeds the "incomplete or inconsistent master data" question.
 
 ## 4. Entity resolution (the core of the project)
@@ -180,6 +180,7 @@ Checked against the workspace on 2026-11-13 with `setup/00_capability_check.py`:
 | Jobs | max 5 concurrent tasks | Narrow DAGs |
 | File-arrival triggers | ✅ on UC volumes; wait-after-last-change must be > 60 s | Ingest job triggered by manifests (75 s wait) |
 | `VARIANT` in Lakeflow pipelines | ✅ | Bronze payload columns |
+| Tables per schema | **max 100**, and every streaming table / materialized view also creates a hidden `__materialization_…` table, so each pipeline object counts twice | One shared `silver.dq_quarantine` instead of one quarantine table per entity; layers in separate schemas; keep an eye on `information_schema.tables` counts |
 | Compute | Serverless only, Python/SQL only | No Scala; Splink via pip on serverless |
 
 **Still to verify:** outbound internet from serverless (decides whether public data is fetched in Databricks or by the shipper), `ai_parse_document()` availability, metric views availability, and Splink installing on serverless.

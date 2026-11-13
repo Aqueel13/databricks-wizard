@@ -27,7 +27,11 @@ class Sim:
         last_mat = self.erp.execute("select max(belnr) from sap.ekbe where belnr like '49%'").fetchone()[0]
         self.next_matdoc = int(last_mat) + 1 if last_mat else 4990000000
         self.clock = datetime.combine(C.HISTORY_END + timedelta(days=1), datetime.min.time()) + timedelta(hours=8)
-        mx = self.coupa.execute("select max(updated_at) from purchase_orders").fetchone()[0]
+        # start after the latest timestamp anywhere in Coupa, so new changes always pass the shipper's watermarks
+        mx = self.coupa.execute("""select max(t) from (
+            select max(updated_at) t from purchase_orders union all select max(updated_at) from invoices
+            union all select max(updated_at) from receipts union all select max(updated_at) from suppliers
+            union all select max(updated_at) from contracts union all select max(updated_at) from order_lines) x""").fetchone()[0]
         if mx and mx > self.clock:
             self.clock = mx + timedelta(hours=1)
         mx = self.erp.execute("select max(cpudt) from sap.ekbe").fetchone()[0]

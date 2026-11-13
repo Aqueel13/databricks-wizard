@@ -13,11 +13,29 @@ resources:
       configuration:
         wizard.landing: /Volumes/${var.catalog}/bronze/landing
 
+    wizard_silver:
+      name: wizard-silver
+      catalog: ${var.catalog}
+      schema: silver
+      serverless: true
+      continuous: false
+      channel: CURRENT
+      libraries:
+        - file:
+            path: ../pipelines/silver.py
+      environment:
+        dependencies:
+          - openpyxl==3.1.5
+      configuration:
+        wizard.catalog: ${var.catalog}
+
   jobs:
     wizard_ingest:
       name: wizard-ingest
       description: Runs the bronze pipeline whenever the shipper completes a batch (a new manifest lands).
       max_concurrent_runs: 1
+      queue:
+        enabled: true
       trigger:
         pause_status: UNPAUSED
         file_arrival:
@@ -28,3 +46,8 @@ resources:
         - task_key: bronze
           pipeline_task:
             pipeline_id: ${resources.pipelines.wizard_bronze.id}
+        - task_key: silver
+          depends_on:
+            - task_key: bronze
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.wizard_silver.id}

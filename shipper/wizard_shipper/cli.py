@@ -38,6 +38,10 @@ def main() -> None:
     r.add_argument("--interval", type=float, default=0, help="seconds between cycles; 0 = run once")
     g = sub.add_parser("ground-truth")
     g.add_argument("--sink", choices=["volume", "local"], default="volume")
+    sc = sub.add_parser("scenario", help="ship a test scenario phase (see scenario.py)")
+    sc.add_argument("name", choices=["out-of-order"])
+    sc.add_argument("--phase", type=int, required=True, choices=[1, 2, 3])
+    sc.add_argument("--sink", choices=["volume", "local"], default="volume")
     st = sub.add_parser("status")
     st.add_argument("--sink", choices=["volume", "local"], default="volume")
     a = p.parse_args()
@@ -54,6 +58,10 @@ def main() -> None:
         sink = VolumeSink(root=GT_VOLUME) if a.sink == "volume" else make_sink("local")
         for f in sorted((ROOT / "data" / "stage").glob("*.parquet")):
             print("uploaded", sink.put(f"{f.name}" if a.sink == "volume" else f"_ground_truth/{f.name}", f.read_bytes()))
+    elif a.cmd == "scenario":
+        from .scenario import ship_phase
+        m = ship_phase(make_sink(a.sink), State(a.sink), a.phase)
+        print(f"shipped phase {a.phase}: {m['label']} -> {m['files'][0]['path']}")
     elif a.cmd == "status":
         for row in State(a.sink).db.execute("select created_at, source, entity, files, records, bytes from batch "
                                       "order by created_at desc limit 20"):

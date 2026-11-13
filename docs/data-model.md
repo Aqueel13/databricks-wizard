@@ -109,7 +109,10 @@ Examples: `bronze.sap_lfa1_cdc`, `bronze.sap_ekpo_cdc`, `bronze.coupa_suppliers`
 | `silver.doc_chunks` | chunk | `doc_id`, `supplier_ref`, `page`, `chunk_id`, `text`, `doc_type` |
 | `silver.doc_extractions` | document | Typed fields from `ai_query()` with JSON schema |
 | `silver.sanctions_entities` | entity/alias | OFAC, exploded aliases |
-| `silver._quarantine_*` | rejected row | Original row + `failed_rule` + `quarantined_at` |
+| `silver.dq_quarantine` | rejected row | `source`, `entity`, original row as JSON, `_dq_failed` rules, `_quarantined_at` (one shared table) |
+| `silver.supplier_records` | source supplier record | Canonical shape for entity resolution: SAP (35-char name split rejoined), Coupa and HICX records, national ID type and validity |
+| `silver.dq_findings` | finding | Soft-rule results: missing/invalid national IDs, invoice/PO mismatch, duplicate invoices, expired certificates, schema drift |
+| `silver.dq_summary` | source × rule | Findings and quarantined counts (scorecard input) |
 
 ## Entity resolution outputs
 
