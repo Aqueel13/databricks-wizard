@@ -10,10 +10,11 @@ SQL="uv run --project shipper -q python scripts/dbx_sql.py"
 run() { $SQL "$1" >/dev/null && echo "  $1"; }
 echo "granting to app service principal $SP"
 run "GRANT USE CATALOG ON CATALOG $CAT TO \`$SP\`"
-for s in silver gold; do run "GRANT USE SCHEMA ON SCHEMA $CAT.$s TO \`$SP\`"; done
+for s in silver gold ops; do run "GRANT USE SCHEMA ON SCHEMA $CAT.$s TO \`$SP\`"; done
 for t in silver.er_review_queue silver.er_scored_pairs silver.supplier_records gold.dim_supplier gold.supplier_sanctions_hits; do
   run "GRANT SELECT ON TABLE $CAT.$t TO \`$SP\`"
 done
 for t in silver.er_steward_decisions silver.sanctions_alert_decisions; do
   run "GRANT SELECT, MODIFY ON TABLE $CAT.$t TO \`$SP\`"
 done
+run "GRANT SELECT, MODIFY ON TABLE $CAT.ops.agent_proposals TO \`$SP\`"

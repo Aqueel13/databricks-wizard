@@ -10,7 +10,8 @@ st.title("Supplier data steward")
 st.caption(f"Signed in as {steward}. Decisions are recorded with your name and take effect on the next "
            "entity-resolution run.")
 
-tab_match, tab_alerts, tab_log = st.tabs(["Match review", "Sanctions alerts", "Decisions and apply"])
+tab_match, tab_alerts, tab_agent, tab_log = st.tabs(["Match review", "Sanctions alerts", "Agent proposals",
+                                                     "Decisions and apply"])
 
 
 def fmt(name, local, country, city, id_type, nid):
@@ -64,6 +65,25 @@ with tab_alerts:
                 st.rerun()
             if c2.button("Dismiss", key=f"ad_{i}"):
                 data.decide_alert(r.to_dict(), "dismiss", steward, note)
+                st.rerun()
+
+with tab_agent:
+    pr = data.proposals("pending")
+    st.subheader(f"{len(pr)} agent proposals waiting for review")
+    st.write("Agents using the stewardship MCP server can propose decisions but never approve them. Approving writes "
+             "the decision under your name, citing the proposal.")
+    for _, p in pr.iterrows():
+        with st.container(border=True):
+            st.markdown(f"**{p.kind}** `{p.item_key}` → proposed **{p.decision}** by {p.proposed_by} "
+                        f"({str(p.created_at)[:16]})")
+            st.markdown(f"> {p.rationale}")
+            note = st.text_input("Note", key=f"pn_{p.proposal_id}", placeholder="optional")
+            c1, c2, _ = st.columns([1, 1, 4])
+            if c1.button("Approve", key=f"pa_{p.proposal_id}", type="primary"):
+                data.review_proposal(p.to_dict(), True, steward, note)
+                st.rerun()
+            if c2.button("Reject", key=f"pr_{p.proposal_id}"):
+                data.review_proposal(p.to_dict(), False, steward, note)
                 st.rerun()
 
 with tab_log:

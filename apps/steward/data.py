@@ -95,3 +95,31 @@ def apply_decisions() -> int:
     r = w.api_client.do("POST", "/api/2.2/jobs/run-now", body={
         "job_id": int(os.environ["WIZARD_JOB_ID"]), "only": ["entity_resolution", "gold", "semantic_layer"]})
     return r["run_id"]
+
+
+# ------------------------------------------------------------------ agent proposals (from the MCP stewardship server)
+def proposals(status: str = "pending") -> pd.DataFrame:
+    return query(f"""SELECT proposal_id, kind, item_key, decision, rationale, proposed_by, status, created_at,
+                            reviewed_by, reviewed_at, review_note
+                     FROM {CAT}.ops.agent_proposals WHERE status = :st ORDER BY created_at""", {"st": status})
+
+
+def review_proposal(p: dict, approve: bool, steward: str, note: str) -> None:
+    """A person approves or rejects an agent's proposal. Approval writes the decision under the person's name."""
+    if approve:
+        why = f"approved agent proposal {p['proposal_id']} ({p['proposed_by']}): {p['rationale']}"
+        if note:
+            why = f"{note} | {why}"
+        if p["kind"] == "match":
+            decide_pair(p["item_key"], p["decision"], steward, why[:1000])
+        else:
+            supplier_id, ent_num = p["item_key"].split("|")
+            hit = query(f"""SELECT screened_name, sanctioned_name FROM {CAT}.gold.supplier_sanctions_hits
+                            WHERE supplier_id = :s AND ent_num = :e""", {"s": supplier_id, "e": int(ent_num)})
+            row = {"supplier_id": supplier_id, "ent_num": int(ent_num),
+                   "screened_name": hit["screened_name"].iloc[0] if len(hit) else None,
+                   "sanctioned_name": hit["sanctioned_name"].iloc[0] if len(hit) else None}
+            decide_alert(row, p["decision"], steward, why[:1000])
+    execute(f"""UPDATE {CAT}.ops.agent_proposals SET status = :st, reviewed_by = :by, reviewed_at = current_timestamp(),
+                review_note = :note WHERE proposal_id = :id AND status = 'pending'""",
+            {"st": "approved" if approve else "rejected", "by": steward, "note": note, "id": p["proposal_id"]})

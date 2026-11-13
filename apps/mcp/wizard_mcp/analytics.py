@@ -155,6 +155,78 @@ def search_suppliers(query_text: str, country: str | None = None, limit: int = 1
 
 @mcp.tool()
 @audited("analytics")
+def get_spend_concentration(category: str | None = None, ctx: Context | None = None) -> dict:
+    """Spend concentration per category over the last 12 months: Herfindahl-Hirschman index (HHI, 0-10,000;
+    >= 2,500 highly concentrated, 1,500-2,500 moderately), number of suppliers, top-1 and top-3 shares and the top
+    supplier. Optionally one category (name or id)."""
+    cond, p = "", {}
+    if category:
+        cond, p = "WHERE upper(c.category_name) = upper(:c) OR upper(c.category_id) = upper(:c)", {"c": category}
+    q = f"""SELECT c.category_name, c.spend_type, round(c.spend_usd_12m, 2) AS spend_usd_12m, c.suppliers, c.hhi,
+                   c.top1_share, c.top3_share, c.concentration, c.top_supplier_id, s.legal_name AS top_supplier
+            FROM {CAT}.gold.spend_concentration c LEFT JOIN {CAT}.gold.supplier_360 s ON s.supplier_id = c.top_supplier_id
+            {cond} ORDER BY c.hhi DESC"""
+    return {"result": query(q, p), "definition": "HHI = sum over suppliers of (share of category spend x 100)^2",
+            "sql": q}
+
+
+SORTS = {"risk": "risk_score DESC", "spend": "lifetime_spend_usd DESC", "dq": "dq_score ASC",
+         "deterioration": "on_time_drop DESC", "name": "legal_name ASC"}
+
+
+@mcp.tool()
+@audited("analytics")
+def find_suppliers(risk_band: str | None = None, deteriorating: bool | None = None, category: str | None = None,
+                   country: str | None = None, has_dq_issues: bool | None = None,
+                   compliance_flag: str | None = None, sort: str = "risk", limit: int = 25,
+                   ctx: Context | None = None) -> dict:
+    """List golden suppliers matching governed conditions (all optional, combined with AND):
+    risk_band 'high' | 'medium' | 'low'; deteriorating (delivery performance, market-adjusted, statistically tested);
+    category (e.g. 'Logistics', 'IT services', 'Direct ingredients'); country (ISO code); has_dq_issues (master data);
+    compliance_flag 'expired_certificate' | 'sanctions_alert' | 'sanctions_confirmed' | 'purchasing_blocked'.
+    sort: risk | spend | dq | deterioration | name."""
+    where, p = [], {}
+    if risk_band:
+        where.append("s.risk_band = :rb")
+        p["rb"] = risk_band.lower()
+    if deteriorating is not None:
+        where.append("s.deteriorating = :det")
+        p["det"] = bool(deteriorating)
+    if category:
+        where.append("(upper(c.category_name) = upper(:cat) OR upper(s.main_category) = upper(:cat))")
+        p["cat"] = category
+    if country:
+        where.append("s.country = :cc")
+        p["cc"] = country.upper()
+    if has_dq_issues is not None:
+        where.append("(size(s.dq_issues) > 0) = :dq")
+        p["dq"] = bool(has_dq_issues)
+    flags = {"expired_certificate": "s.expired_certificates > 0", "sanctions_alert": "s.sanctions_alerts > 0",
+             "sanctions_confirmed": "array_contains(s.risk_drivers, 'confirmed sanctions match')",
+             "purchasing_blocked": "s.purchasing_blocked"}
+    if compliance_flag:
+        if compliance_flag not in flags:
+            raise ValueError(f"compliance_flag must be one of {sorted(flags)}")
+        where.append(flags[compliance_flag])
+    if sort not in SORTS:
+        raise ValueError(f"sort must be one of {sorted(SORTS)}")
+    q = f"""SELECT s.supplier_id, s.legal_name, s.legal_name_local, s.country, c.category_name AS main_category,
+                   s.risk_band, s.risk_score, array_join(s.risk_drivers, '; ') AS risk_drivers,
+                   round(s.lifetime_spend_usd, 0) AS lifetime_spend_usd, s.deteriorating,
+                   round(s.on_time_baseline, 3) AS on_time_baseline, round(s.on_time_recent, 3) AS on_time_recent,
+                   s.dq_score, array_join(s.dq_issues, ', ') AS dq_issues
+            FROM {CAT}.gold.supplier_360 s LEFT JOIN {CAT}.gold.dim_category c ON c.category_id = s.main_category
+            {"WHERE " + " AND ".join(where) if where else ""}
+            ORDER BY {SORTS[sort].replace("risk_score", "s.risk_score").replace("legal_name", "s.legal_name")} NULLS LAST
+            LIMIT {max(1, min(int(limit), 200))}"""
+    total = query(f"""SELECT count(*) n FROM {CAT}.gold.supplier_360 s
+                      LEFT JOIN {CAT}.gold.dim_category c ON c.category_id = s.main_category
+                      {"WHERE " + " AND ".join(where) if where else ""}""", p)[0]["n"]
+    return {"result": query(q, p), "total_matching": total, "sql": q, "parameters": p}
+
+
+@mcp.tool()
+@audited("analytics")
 def get_supplier_360(supplier_id: str, ctx: Context | None = None) -> dict:
     """Everything about one golden supplier: identity, spend, delivery trend, risk (with drivers), data quality,
     the source-system records it was resolved from, its documents, and sanctions screening status."""

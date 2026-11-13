@@ -1,6 +1,6 @@
 # 0005: Pick models by benchmark, not by default
 
-**Status:** Accepted for ER adjudication, name embeddings and document extraction (benchmarks below, 2026-11-13); tool-calling to benchmark in M7
+**Status:** Accepted: ER adjudication, name embeddings, document extraction and agent tool-calling (benchmarks below, 2026-11-13/14)
 
 ## Context
 
@@ -84,3 +84,28 @@ Code: `scripts/m6_extraction_bench.py`.
 **Decision:** Llama 4 Maverick. All four reach ~99% once the schema is right; the first, looser schema let models
 drop fields (Qwen omitted the expiry date) and swap contract parties (both Llamas named the customer as supplier).
 Schema and prompt design mattered more than model choice.
+
+## Benchmark 4: agent tool-calling over the MCP servers (M7)
+
+12 business questions, each answered by an agent loop (`agents/wizard_agent.py bench`) with the 15 Wizard MCP tools.
+Expected answers are computed live from gold. Scored: right tool used, answer correct, tool errors, latency.
+One question tests policy: an unconfirmed sanctions alert must not be reported as "sanctioned".
+
+| Model | Right tool | Correct answer | Tool errors | Avg time |
+|---|---|---|---|---|
+| **`qwen3-next-80b-a3b-instruct`** (with date context) | **12/12** | **12/12** | 1 | **6.1 s** |
+| `gpt-oss-120b` | 12/12 | 12/12 | 1 | 7.4 s |
+| `meta-llama-3-3-70b-instruct` | 12/12 | 11/12 | 3 | 8.9 s |
+| `llama-4-maverick` | 10/12 | 7/12 | 2 | 7.6 s |
+
+**Decision:** Qwen3-Next is the default agent model (perfect and fastest); GPT-OSS 120B is the alternative.
+
+What the benchmark changed, beyond picking a model:
+- **A missing tool, not weak models:** in the first run every model failed "which category is most concentrated?"
+  by writing broken exploratory SQL. Adding a governed `get_spend_concentration` tool fixed it for all of them.
+- **Agents need the date:** Qwen refused "since May 2026" as "in the future". The harness now states today's date
+  and the data's as-of date.
+- **Format reliability differs from task quality:** Maverick, the best document extractor (benchmark 3), often writes
+  tool calls as text (`[get_document(...)]`) instead of structured calls, so it is not used for agents.
+- **Scoring needs care:** a "wrong" answer used non-breaking hyphens in dates (`2026‑06‑19`); the checker now
+  normalizes dash characters.

@@ -147,19 +147,11 @@ KPI definitions are defined once as **Unity Catalog metric views** (supported on
 - **AI/BI dashboard** as code (`dashboards/supplier360.lvdash.json`, deployed by the bundle): headline KPIs, spend and concentration, market on-time trend, deteriorating suppliers, risk watchlist, master-data issues.
 - **Exit test:** `scripts/m5_genie_eval.py` asks Genie the four core questions, runs its SQL and scores the answers against gold. 4/4 pass.
 
-### MCP tools
+### MCP servers
 
-| Tool | Purpose |
-|---|---|
-| `search_suppliers(query)` | Fuzzy and semantic lookup returning `supplier_id`s |
-| `get_supplier_360(supplier_id)` | Golden record, KPIs, risk, DQ, source-system IDs |
-| `get_kpi(metric, filters)` | Governed metric query; returns the value and the SQL that produced it |
-| `trace_metric(metric, supplier_id)` | Lineage: gold → silver → source rows/docs |
-| `search_documents(query, supplier_id?)` | Vector search with page-level citations |
-| `explain_supplier_match(supplier_id)` | Entity-resolution evidence |
-| `simulate_consolidation(supplier_ids, category)` | What-if spend consolidation (stretch goal) |
-
-All tools are read-only and run under a service principal that only has `SELECT` on gold and the index. Agents cannot reach bronze or raw PII.
+Three MCP servers in one Databricks App, mirroring WatchDog: `/analytics/mcp`, `/knowledge/mcp`, `/stewardship/mcp`.
+Tools, conventions and the approval flow: [ADR 0006](adr/0006-mcp-as-agent-interface.md). Every tool returns data
+plus provenance (SQL run, tables, citations); every call is audited in `ops.agent_tool_calls`.
 
 ## 7. Governance
 
