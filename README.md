@@ -100,7 +100,9 @@ Raw data is never committed; `make data` downloads it (`scripts/fetch_data.sh`).
 | [ProZorro public procurement](https://www.kaggle.com/datasets/oleksastepaniuk/prozorro-public-procurement-dataset) by Oleksa Stepaniuk | CC0 | Ukrainian suppliers in Cyrillic (UA01) |
 | [World Bank corporate procurement contract awards](https://www.kaggle.com/datasets/theworldbank/corporate-procurement-contract-awards) | CC0 | International indirect-spend vendors |
 | [Amazon ML Challenge 2026 mirror](https://www.kaggle.com/datasets/satwiksps/amazon-ml-challenge-2026) by satwiksps | MIT (as stated by the mirror) | External entity-resolution benchmark only |
-| [OFAC SDN list](https://ofac.treasury.gov/specially-designated-nationals-and-blocked-persons-list-sdn-human-readable-lists) | US government work (public domain) | Sanctions screening |
+| [ECB euro foreign exchange reference rates](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html) | Free reuse, source acknowledged | Monthly FX rates to USD (`gold.dim_fx`) |
+| [World Bank corporate procurement awards, live (Finances One DS00028)](https://financesone.worldbank.org/corporate-procurement-contract-awards/DS00028) | CC BY 4.0 | Optional live snapshot (`scripts/fetch_worldbank_live.py`); builds use the pinned Kaggle copy by default |
+| [OFAC SDN list](https://ofac.treasury.gov/specially-designated-nationals-and-blocked-persons-list-sdn-human-readable-lists) | US government work (public domain) | Sanctions screening (names, aliases, addresses) |
 | [Company Documents Dataset](https://www.kaggle.com/datasets/ayoubcherguelaine/company-documents-dataset), [Procurement Invoice Fraud](https://www.kaggle.com/datasets/tokelomashile2/procurement-invoice-fraud-dataset) | Apache-2.0 | Downloaded for reference; not used in outputs |
 | [Supply Chain Datasets](https://www.kaggle.com/datasets/ayodejiibrahimlateef/supply-chain-datasets) | CC BY 4.0 | Downloaded for reference; not used in outputs |
 | [Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) | CC BY-NC-SA 4.0 | Not used (no rows republished) |

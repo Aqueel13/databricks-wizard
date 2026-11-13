@@ -130,7 +130,9 @@ Written by the `entity_resolution` task (`er/jobs/run_er.py`) after silver.
 | `silver.er_dq_findings` | Cross-source findings that need entity resolution: `conflicting_address`, `inconsistent_city_format` |
 | `gold.supplier_match_evidence` | Accepted links that survived the constraints: method, probability, evidence, LLM reason |
 | `gold.supplier_source_xref` | Every source record with its `supplier_id` and how it was matched |
-| `gold.supplier_sanctions_hits` | Screening alerts: supplier name vs OFAC name/alias, score, program (alerts for review, not findings) |
+| `gold.supplier_sanctions_hits` | Screening alerts: supplier name vs OFAC name/alias, score, program, `sdn_countries` (from OFAC addresses), `country_check` (match / conflict / unknown), `status` (open / auto_cleared / confirmed / dismissed). A country conflict with similarity below 0.97 is auto-cleared; a steward's verdict always wins. Alerts are for review, not findings |
+| `gold.dim_supplier_history` | SCD type 2 versions of the golden record (name, IDs, location, legal form, source systems, block). Merged by the ER job; `is_current` marks the live version |
+| `gold.dim_fx` | Monthly USD rates from ECB euro reference rates. Facts convert at the document month. UAH uses a fixed rate (the ECB doesn't publish it). SAP TCURR isn't used: the demo extract covers only 2006–2010 |
 | `ops.er_eval` | Pairwise / B-cubed / per-script metrics and defect recall per run (when the answer key is present) |
 | `ops.er_runs` | Run summary (records, pairs, links by method, review queue size, LLM calls, F1) and the trained model |
 

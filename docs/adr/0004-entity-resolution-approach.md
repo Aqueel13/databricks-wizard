@@ -91,4 +91,21 @@ What it shows:
 - **India, two concrete gaps:** (1) names in Devanagari, Telugu and Gujarati, whose legal forms (`प्रा. लि.`, `प्राइवेट लिमिटेड`, `Pvt Ltd`) the normalizer doesn't know, so transliterated variants never share a skeleton; (2) **no street-address comparison**: here identity often lives in the address (`PJA Infrastructure LLP` vs `Aviiri`, same `1020/31 Gautam Nagar`), and generic names in the same city over-merge (`Elite Sangh` / `Rn Sangh`). Supplier masters have registration IDs; this data doesn't.
 - Next steps, both general: Indic legal forms + transliteration rules; an address comparison used when national IDs are absent.
 
+**Follow-up (both gaps closed, 2026-11-14).** Same sample, same configuration, no LLM:
+
+| Subset | Pairwise F1 before | after | B-cubed F1 after |
+|---|---|---|---|
+| US | 0.803 | **0.898** | 0.935 |
+| India | 0.377 | **0.717** (precision 0.887) | 0.837 |
+| All | 0.651 | **0.829** | 0.897 |
+
+("Before" is a rerun with the matcher as it stood that day. The first published numbers above came from an earlier build of the matcher.)
+
+1. **Indic legal forms in native script** (प्राइवेट लिमिटेड, प्रा. लि., லிமிடெட், લિમિટેડ, …) are stripped before transliteration.
+2. **Consonant skeleton.** Transliteration drops the inherent vowel (सन कंस्ट्रक्शंस → `sn knstrksns`), and Tamil writes k/g and p/b with one letter, so a vowel-less, voicing-folded skeleton becomes its own name level. EM learns its weight. It applies only when one side is in Indic script.
+3. **Street address:** the numbers in the address plus a skeleton of its distinctive words, with blocking on the number set (three or more digits).
+4. **Same street outweighs a city mismatch** in the cluster constraints. The parsed city was often an artefact ("New Delhi, West Delhi" vs "Delhi"). Different national IDs and jurisdictions still block.
+
+Items 2 and 3 switch on only when the data contains Indic script or addresses. The supplier data has neither, so the supplier model and its results are byte-identical (verified).
+
 Running it also hardened the matcher for data without IDs or local names: Splink training now picks its deterministic rule from the evidence available (IDs, else exact name + city), string columns get an explicit dtype (an all-null column was inferred as INTEGER), and the cluster code treats pandas NA as missing.
