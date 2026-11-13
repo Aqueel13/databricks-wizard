@@ -24,5 +24,5 @@ Each milestone ends with something that can be demonstrated. Exit criteria are p
 
 ## Links to other portfolio projects
 
-- **Intelligence WatchDog** consumes ATLAS through MCP (M7).
+- **Intelligence WatchDog** consumes Databricks Wizard through MCP (M7).
 - **Agent evaluation framework (Project 3)** builds on the model benchmark from M7 and the entity-resolution eval from M4.

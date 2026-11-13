@@ -8,7 +8,7 @@ Several agents need governed supplier data: Intelligence WatchDog, general assis
 
 ## Decision
 
-Expose ATLAS to agents through an **MCP server** hosted as a Databricks App. Its tools are read-only and typed (`search_suppliers`, `get_supplier_360`, `get_kpi`, `trace_metric`, `search_documents`, `explain_supplier_match`). It runs as the `atlas_agent` service principal, which has `SELECT` on gold tables and the vector index only.
+Expose Databricks Wizard to agents through an **MCP server** hosted as a Databricks App. Its tools are read-only and typed (`search_suppliers`, `get_supplier_360`, `get_kpi`, `trace_metric`, `search_documents`, `explain_supplier_match`). It runs as the `wizard_agent` service principal, which has `SELECT` on gold tables and the vector index only.
 
 Tools return data **plus provenance**: the SQL run, the tables read, and document citations.
 
@@ -20,6 +20,6 @@ Tools return data **plus provenance**: the SQL run, the tables read, and documen
 
 ## Consequences
 
-- Any MCP client can use ATLAS. The WatchDog integration is configuration, not code.
+- Any MCP client can use Databricks Wizard. The WatchDog integration is configuration, not code.
 - The tool surface is small and testable, so the eval framework can cover it.
 - Free Edition Apps stop after 24 hours, so the server is restarted before demos. A local run mode against the workspace is kept for development.

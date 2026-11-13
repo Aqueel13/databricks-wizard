@@ -10,12 +10,12 @@ Supplier data includes PII and sensitive financial fields (bank accounts, tax ID
 
 All access control, masking, classification and lineage is in Unity Catalog:
 
-- **Groups:** `atlas_engineers` (all layers), `atlas_stewards` (silver + gold, unmasked, review queue), `atlas_analysts` (gold, masked), and the `atlas_agent` service principal (gold + vector index, masked, read-only).
-- **Column masks** on `tax_id`, `bank_account`, contact email and phone, using SQL UDFs that check `is_account_group_member('atlas_stewards')`.
+- **Groups:** `wizard_engineers` (all layers), `wizard_stewards` (silver + gold, unmasked, review queue), `wizard_analysts` (gold, masked), and the `wizard_agent` service principal (gold + vector index, masked, read-only).
+- **Column masks** on `tax_id`, `bank_account`, contact email and phone, using SQL UDFs that check `is_account_group_member('wizard_stewards')`.
 - **Row filters** (demo): category managers see only their categories in `fact_po_line`.
 - **Tags:** `pii`, `source_system`, `data_owner`, `certified`, applied by the pipelines.
 - **Lineage:** from system tables, exposed to agents via `trace_metric`.
-- **Audit:** the MCP server logs every tool call to `atlas.ops.agent_tool_calls`.
+- **Audit:** the MCP server logs every tool call to `wizard.ops.agent_tool_calls`.
 
 ## Alternatives considered
 

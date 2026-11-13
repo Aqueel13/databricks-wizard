@@ -4,7 +4,7 @@
 
 ## Context
 
-ATLAS uses models for four jobs: agent tool-calling, heavier reasoning, bulk row-level `ai_query()`, and document understanding. Free Edition offers these endpoints (checked 2026-11-13):
+Databricks Wizard uses models for four jobs: agent tool-calling, heavier reasoning, bulk row-level `ai_query()`, and document understanding. Free Edition offers these endpoints (checked 2026-11-13):
 
 `databricks-gpt-oss-120b`, `databricks-gpt-oss-20b`, `databricks-qwen3-next-80b-a3b-instruct`, `databricks-qwen35-122b-a10b`, `databricks-gemma-3-12b`, `databricks-meta-llama-3-1-8b-instruct`, `databricks-meta-llama-3-3-70b-instruct`, `databricks-llama-4-maverick`, `databricks-gte-large-en`, `databricks-bge-large-en`, `databricks-qwen3-embedding-0-6b`
 

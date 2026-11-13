@@ -4,11 +4,11 @@
 
 ## Context
 
-ATLAS combines CDC streams, API pages, file exports and documents. Each needs to be kept raw for audit, cleaned and conformed, then shaped for business use. Data quality has to be enforced and visible, not hidden in notebook code.
+Databricks Wizard combines CDC streams, API pages, file exports and documents. Each needs to be kept raw for audit, cleaned and conformed, then shaped for business use. Data quality has to be enforced and visible, not hidden in notebook code.
 
 ## Decision
 
-Use a bronze/silver/gold medallion layout in the `atlas` catalog, built with Lakeflow Declarative Pipelines:
+Use a bronze/silver/gold medallion layout in the `wizard` catalog, built with Lakeflow Declarative Pipelines:
 
 - Bronze: Auto Loader streaming tables, append-only, with ingest metadata
 - Silver: `AUTO CDC` for change data, expectations for quality, quarantine tables for rejected rows
@@ -23,4 +23,4 @@ Use a bronze/silver/gold medallion layout in the `atlas` catalog, built with Lak
 
 - Pipeline DQ metrics and the event log come built in and can feed the DQ dashboard.
 - Entity resolution runs as a separate job between silver and gold, so the DAG is pipeline → ER job → gold pipeline.
-- Lakeflow-specific syntax ties ATLAS to Databricks, which is acceptable because Databricks is the platform being demonstrated.
+- Lakeflow-specific syntax ties the project to Databricks, which is acceptable because Databricks is the platform being demonstrated.

@@ -15,7 +15,7 @@ Run source simulators locally in Docker Compose:
 - A scheduled **HICX export** that writes Excel/CSV
 - A **document generator** for PDFs
 
-A Python **landing shipper** consumes these, writes micro-batches with a manifest (row count, checksum, watermark), and uploads them to `/Volumes/atlas/bronze/landing/` through the Databricks Files API. Auto Loader picks them up from there.
+A Python **landing shipper** consumes these, writes micro-batches with a manifest (row count, checksum, watermark), and uploads them to `/Volumes/wizard/bronze/landing/` through the Databricks Files API. Auto Loader picks them up from there.
 
 ## Alternatives considered
 
@@ -27,5 +27,5 @@ A Python **landing shipper** consumes these, writes micro-batches with a manifes
 
 - It matches a common enterprise pattern: on-prem agents pushing to a cloud landing zone.
 - Manifests give a reconciliation check (sent vs. landed vs. loaded).
-- The shipper is code ATLAS has to maintain, so it stays small and stateless, with its watermarks kept in a local SQLite file.
+- The shipper is code Databricks Wizard has to maintain, so it stays small and stateless, with its watermarks kept in a local SQLite file.
 - In production, the shipper would be replaced by Lakeflow Connect or a vendor CDC tool. The architecture doc notes this mapping.

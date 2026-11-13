@@ -31,7 +31,7 @@ flowchart TB
   PUB[Public reference data] --> SHIP
   SHIP -->|Databricks Files API| LZ
 
-  subgraph Lakehouse["Databricks · catalog atlas"]
+  subgraph Lakehouse["Databricks · catalog wizard"]
     LZ[/Volume bronze.landing/]
     LZ --> BRZ[bronze]
     BRZ --> SLV[silver]
@@ -56,7 +56,7 @@ Databricks Free Edition cannot reach into a laptop, so ingestion is push-based. 
 Landing layout:
 
 ```
-/Volumes/atlas/bronze/landing/
+/Volumes/wizard/bronze/landing/
   sap/cdc/<table>/<yyyy-mm-dd>/<batch>.json      # Debezium envelopes
   coupa/<entity>/<yyyy-mm-dd>/<page>.json         # API pages, watermark in manifest
   hicx/<export_date>/<file>.xlsx|csv
@@ -113,7 +113,7 @@ Details are in [ADR 0004](adr/0004-entity-resolution-approach.md).
 2. Parsing: `ai_parse_document()` if it is available on Free Edition. Otherwise `llama-4-maverick` via `ai_query()` on page images for scans, and `pypdf` for text PDFs.
 3. Structured extraction with `ai_query()` and a JSON schema: certificate type, issuer, expiry date, contract value, payment terms, termination clauses.
 4. Chunks in `silver.doc_chunks` carry `supplier_id`, `doc_id`, `page` and `chunk_id`, so every retrieved passage links back to a governed supplier and a page.
-5. Delta Sync vector index `atlas.silver.doc_chunks_idx` on the single Free Edition endpoint `atlas-vs`, using `databricks-gte-large-en` embeddings.
+5. Delta Sync vector index `wizard.silver.doc_chunks_idx` on the single Free Edition endpoint `wizard-vs`, using `databricks-gte-large-en` embeddings.
 
 Extracted fields such as certificate expiry go into gold risk features. So the documents are more than RAG context: they feed the numbers too.
 
@@ -144,12 +144,12 @@ All tools are read-only and run under a service principal that only has `SELECT`
 
 ## 7. Governance
 
-- **Catalog layout:** `atlas.bronze`, `atlas.silver`, `atlas.gold`, plus `atlas.ops` for manifests, run logs and eval results.
+- **Catalog layout:** `wizard.bronze`, `wizard.silver`, `wizard.gold`, plus `wizard.ops` for manifests, run logs and eval results.
 - **Tags:** `pii`, `source_system`, `data_owner`, `certified` on tables and columns.
-- **Column masks:** bank account and tax ID are masked unless the user is in `atlas_stewards`.
+- **Column masks:** bank account and tax ID are masked unless the user is in `wizard_stewards`.
 - **Row filters:** optional demo of category-manager scoping (each manager sees only their categories).
 - **Lineage:** Unity Catalog system tables (`system.access.table_lineage`, `column_lineage`) power `trace_metric`.
-- **Groups:** `atlas_engineers`, `atlas_stewards`, `atlas_analysts`, and the `atlas_agent` service principal.
+- **Groups:** `wizard_engineers`, `wizard_stewards`, `wizard_analysts`, and the `wizard_agent` service principal.
 
 See [ADR 0007](adr/0007-governance-model.md).
 
@@ -165,12 +165,12 @@ Checked against the workspace on 2026-11-13 with `setup/00_capability_check.py`:
 
 | Capability | Result | Design response |
 |---|---|---|
-| Create catalog `atlas`, schemas, volumes | ✅ | Use `atlas` catalog |
+| Create catalog `wizard`, schemas, volumes | ✅ | Use `wizard` catalog |
 | Delta CDF, time travel | ✅ | CDF on silver for incremental gold |
 | Auto Loader on serverless | ✅ | Bronze ingestion |
 | Lakeflow pipelines, Jobs, Apps, Genie APIs | ✅ | All in scope |
 | Foundation models, `ai_query()` | ✅ | See [ADR 0005](adr/0005-model-selection-by-benchmark.md) |
-| Vector Search | ✅ (1 endpoint, 1 unit) | One endpoint `atlas-vs`, Delta Sync indexes only |
+| Vector Search | ✅ (1 endpoint, 1 unit) | One endpoint `wizard-vs`, Delta Sync indexes only |
 | System lineage/billing tables | ✅ exist, 0 rows on day 1 | Re-check after propagation delay |
 | Apps | max 3, stop after 24h | MCP server + one spare; restart before demos |
 | Jobs | max 5 concurrent tasks | Narrow DAGs |

@@ -1,10 +1,10 @@
-# ATLAS: Supplier 360 on a governed lakehouse
+# Databricks Wizard: Supplier 360 on a governed lakehouse
 
-ATLAS is an enterprise AI data foundation built on Databricks. It ingests supplier data from ERP, procurement, supplier-management and document systems, resolves it into one governed **golden supplier record**, and gives analysts, BI tools and AI agents the same set of trusted, traceable datasets.
+Databricks Wizard is an enterprise AI data foundation built on Databricks. It ingests supplier data from ERP, procurement, supplier-management and document systems, resolves it into one governed **golden supplier record**, and gives analysts, BI tools and AI agents the same set of trusted, traceable datasets.
 
-The core problem is one every procurement team has: the same supplier appears as `IBM Corp` in SAP, `I.B.M.` in Coupa and `International Business Machines` in federal spend data. Until those records are resolved, spend, risk and performance figures are wrong. ATLAS fixes that at the data layer, then builds analytics and AI on top.
+The core problem is one every procurement team has: the same supplier appears as `IBM Corp` in SAP, `I.B.M.` in Coupa and `International Business Machines` in federal spend data. Until those records are resolved, spend, risk and performance figures are wrong. Databricks Wizard fixes that at the data layer, then builds analytics and AI on top.
 
-## Questions ATLAS answers
+## Questions Databricks Wizard answers
 
 | Business question | Answered from |
 |---|---|
@@ -32,7 +32,7 @@ flowchart LR
   end
   PUB[Public data<br/>USAspending · GLEIF · OFAC · SEC EDGAR] --> SHIP
   SHIP -->|Files API| VOL[/UC Volume<br/>bronze.landing/]
-  subgraph DBX["Databricks Free Edition · Unity Catalog `atlas`"]
+  subgraph DBX["Databricks Free Edition · Unity Catalog `wizard`"]
     VOL --> B[Bronze<br/>Auto Loader]
     B --> S[Silver<br/>AUTO CDC · expectations]
     S --> ER[Entity resolution<br/>Splink + embeddings + LLM]

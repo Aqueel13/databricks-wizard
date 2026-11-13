@@ -1,6 +1,6 @@
 # Data model
 
-All tables live in the `atlas` catalog. Bronze and silver keep source-system names and keys. Gold is keyed on the resolved `supplier_id`.
+All tables live in the `wizard` catalog. Bronze and silver keep source-system names and keys. Gold is keyed on the resolved `supplier_id`.
 
 ## Sources
 

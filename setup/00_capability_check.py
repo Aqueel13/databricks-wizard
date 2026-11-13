@@ -1,13 +1,13 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # ATLAS: Free Edition capability check
+# MAGIC # Databricks Wizard: Free Edition capability check
 # MAGIC
 # MAGIC Run all cells top to bottom. Each check writes a PASS / FAIL / INFO row to the summary table at the end.
 # MAGIC Nothing here costs money. **Optional** cells (marked) create resources that use up quota slots, so they are off by default.
 
 # COMMAND ----------
 
-CATALOG = "atlas"          # falls back to "workspace" if you can't create catalogs
+CATALOG = "wizard"          # falls back to "workspace" if you can't create catalogs
 RUN_VECTOR_SEARCH_CREATE = False   # uses your single VS endpoint slot; flip to True when ready
 results = []
 
@@ -141,8 +141,8 @@ check("Vector Search endpoints", lambda: [(e.name, e.endpoint_status.state if e.
 
 if RUN_VECTOR_SEARCH_CREATE:
     from databricks.sdk.service.vectorsearch import EndpointType
-    check("Create VS endpoint 'atlas-vs'", lambda: w.vector_search_endpoints.create_endpoint(
-        name="atlas-vs", endpoint_type=EndpointType.STANDARD).result().name)
+    check("Create VS endpoint 'wizard-vs'", lambda: w.vector_search_endpoints.create_endpoint(
+        name="wizard-vs", endpoint_type=EndpointType.STANDARD).result().name)
 
 # COMMAND ----------
 # MAGIC %md ## 8. System tables (lineage, billing) – needed for the lineage demo
