@@ -107,7 +107,7 @@ class Builder:
             self.defect("missing_national_id", system, "supplier", key, id_type, value, None)
             return None
         if r < p_missing + p_corrupt:
-            bad = T.corrupt_check_digit(value, self.rng)
+            bad = T.corrupt_check_digit(value, self.rng, ein_format=C.EIN_FORMAT_DEFECTS)
             self.defect("invalid_national_id", system, "supplier", key, id_type, value, bad, "check digit changed")
             return bad
         return value
@@ -404,3 +404,50 @@ def write_parquet(db: duckdb.DuckDBPyConnection, rows: list[dict], path) -> None
 
 def build() -> None:
     Builder().run()
+
+
+def refine_sap_identity() -> None:
+    """Answer-key correction (no data changes): SAP demo vendors were grouped into true suppliers by NAME1 + city,
+    which ignored NAME2. SAP training copies ("... Gr. 01", "... Gr. 02") are distinct vendors, but when the group
+    label overflowed into NAME2 they were merged. Re-group SAP demo records by full name (NAME1 + NAME2) + city.
+
+    Safe because the canonical (lowest) LIFNR of every old group is also the lowest of its new sub-group, so ids
+    referenced elsewhere (Coupa/HICX placements, direct-spend vendors, storylines) stay valid."""
+    db = duckdb.connect()
+    rows = db.sql(f"""
+        select lifnr, name1, name2, land1, ort01 from {SAP_CSV.format(f=C.RAW / 'sap/lfa1.csv')}
+        qualify row_number() over (partition by lifnr order by mandt desc) = 1""").fetchall()
+    groups: dict[str, list] = {}
+    for r in rows:
+        groups.setdefault(norm_key(r[1]) + norm_key(r[2]) + "|" + norm_key(r[4]), []).append(r)
+    new_id, new_sup = {}, {}
+    for ms in groups.values():
+        ms.sort(key=lambda r: r[0])
+        ts = f"TS-SAP-{ms[0][0]}"
+        new_sup[ts] = ms[0]
+        for m in ms:
+            new_id[m[0]] = ts
+
+    rel = db.sql(f"select * from '{C.STAGE / 'gt_source_record.parquet'}'")
+    recs = [dict(zip(rel.columns, r)) for r in rel.fetchall()]
+    changed = 0
+    for r in recs:
+        if r["source_system"] == "sap" and r["true_supplier_id"].startswith("TS-SAP-") and r["source_id"] in new_id:
+            if r["true_supplier_id"] != new_id[r["source_id"]]:
+                r["true_supplier_id"] = new_id[r["source_id"]]
+                changed += 1
+    rel = db.sql(f"select * from '{C.STAGE / 'gt_supplier.parquet'}'")
+    sups = [dict(zip(rel.columns, r)) for r in rel.fetchall()]
+    have = {s["true_supplier_id"] for s in sups}
+    used = {r["true_supplier_id"] for r in recs}
+    missing = [ts for ts in new_sup if ts not in have]
+    for ts in missing:
+        m = new_sup[ts]
+        sups.append(dict(true_supplier_id=ts, canonical_name=m[1], country=m[3], origin="sap_demo",
+                         national_id_type=None, national_id=None, category=None, real_identity=False, city=m[4],
+                         storyline=None))
+    sups = [s for s in sups if s["true_supplier_id"] in used]
+    write_parquet(db, recs, C.STAGE / "gt_source_record.parquet")
+    write_parquet(db, sups, C.STAGE / "gt_supplier.parquet")
+    print(f"gt-refine: {changed} SAP records re-assigned, {len(missing)} true suppliers added, "
+          f"{len(sups)} true suppliers in total")

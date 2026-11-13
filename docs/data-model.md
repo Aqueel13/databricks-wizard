@@ -116,15 +116,22 @@ Examples: `bronze.sap_lfa1_cdc`, `bronze.sap_ekpo_cdc`, `bronze.coupa_suppliers`
 
 ## Entity resolution outputs
 
+Written by the `entity_resolution` task (`er/jobs/run_er.py`) after silver.
+
 | Table | Description |
 |---|---|
-| `silver.er_candidate_pairs` | Blocked pairs with comparison vectors |
-| `silver.er_scored_pairs` | Splink match probability per pair |
-| `silver.er_llm_adjudications` | Middle-band pairs: model, prompt version, verdict, reason |
-| `silver.er_review_queue` | Pairs waiting for a steward decision |
-| `silver.er_clusters` | `source`, `source_id` → `cluster_id` |
-| `gold.supplier_match_evidence` | Final links with score, evidence and method (`deterministic`, `probabilistic`, `llm`, `steward`) |
-| `ops.er_eval` | Precision, recall and F1 against ground truth, per run |
+| `silver.er_name_embeddings` | `qwen3-embedding-0-6b` vector per supplier name (Latin and local script); incremental by name hash |
+| `silver.er_scored_pairs` | Every candidate pair: Splink probability and match weight, comparison levels (`evidence` JSON), decision `method`, `linked` |
+| `silver.er_llm_adjudications` | LLM verdict cache: pair, model, prompt version, verdict, reason, raw response |
+| `silver.er_steward_decisions` | Steward overrides (`match` / `no_match`); win over every other layer |
+| `silver.er_review_queue` | Pairs needing a human: LLM unsure, or links refused by cluster constraints (with the reason) |
+| `silver.er_clusters` | `source`, `source_id` → `supplier_id` |
+| `silver.er_dq_findings` | Cross-source findings that need entity resolution: `conflicting_address`, `inconsistent_city_format` |
+| `gold.supplier_match_evidence` | Accepted links that survived the constraints: method, probability, evidence, LLM reason |
+| `gold.supplier_source_xref` | Every source record with its `supplier_id` and how it was matched |
+| `gold.supplier_sanctions_hits` | Screening alerts: supplier name vs OFAC name/alias, score, program (alerts for review, not findings) |
+| `ops.er_eval` | Pairwise / B-cubed / per-script metrics and defect recall per run (when the answer key is present) |
+| `ops.er_runs` | Run summary (records, pairs, links by method, review queue size, LLM calls, F1) and the trained model |
 
 ## Gold
 
@@ -144,7 +151,7 @@ erDiagram
 
 | Table | Grain | Key columns |
 |---|---|---|
-| `dim_supplier` | supplier (SCD2) | `supplier_id`, `legal_name`, `lei`, `tax_id` (masked), `country`, `parent_supplier_id`, `status`, `valid_from`, `valid_to`, `is_current` |
+| `dim_supplier` | supplier | `supplier_id`, `legal_name` (+ source), `legal_name_local`, `national_id` (+ type, source; validated only), `conflicting_national_ids`, `country`, `city`, `legal_form`, `source_systems`, `sap_vendors`, `coupa_supplier_ids`, `hicx_ids`, `purchasing_blocked`. SCD2 history and category planned for M5 |
 | `supplier_source_xref` | source record | `supplier_id`, `source`, `source_id`, `match_method`, `match_score` |
 | `dim_category` | category | `category_id`, UNSPSC-style hierarchy |
 | `fact_po_line` | PO line | `supplier_id`, `category_id`, `order_date`, `amount_usd`, `qty`, `promised_date`, `source`, `source_po_id` |

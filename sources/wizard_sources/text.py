@@ -209,12 +209,13 @@ def edrpou_valid(code: str) -> bool:
     return s == int(d[7])
 
 
-def corrupt_check_digit(code: str, rng: random.Random) -> str:
+def corrupt_check_digit(code: str, rng: random.Random, ein_format: bool = False) -> str:
     """Make the ID fail validation (recorded as an injected defect).
 
-    Checksummed IDs (NIP, EDRPOU) get a wrong check digit. A US EIN has no check digit, so changing
-    a digit would be undetectable; it gets a format error instead (one digit dropped)."""
-    if re.fullmatch(r"\d{2}-\d{7}", code):
+    Checksummed IDs (NIP, EIN) get a wrong check digit. A US EIN has no check digit, so changing a digit is
+    undetectable; with ein_format=True it gets a format error instead (one digit dropped). That option changes
+    the random sequence, so it is off by default to keep existing seeds reproducible (WIZARD_EIN_FORMAT_DEFECTS)."""
+    if ein_format and re.fullmatch(r"\d{2}-\d{7}", code):
         return code[:-1]
     last = code[-1]
     new = rng.choice([c for c in string.digits if c != last])

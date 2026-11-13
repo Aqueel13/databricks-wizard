@@ -1,6 +1,7 @@
 """wizard-sources: build and run the simulated source systems.
 
   universe   build supplier universe + ground truth          -> data/stage
+  gt-refine  apply answer-key corrections to an existing build (no data changes)
   sap        load SAP tables (+ regional POs, drift) into Postgres `sap`
   coupa      generate indirect spend and load Postgres `coupa`
   hicx       write HICX export files                           -> data/exports/hicx
@@ -18,7 +19,7 @@ def main() -> None:
     p = argparse.ArgumentParser(prog="wizard-sources", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
-    for c in ("universe", "sap", "coupa", "hicx", "docs", "seed"):
+    for c in ("universe", "sap", "coupa", "hicx", "docs", "seed", "gt-refine"):
         sub.add_parser(c)
     s = sub.add_parser("simulate")
     s.add_argument("--interval", type=float, default=5.0, help="seconds between change batches")
@@ -28,8 +29,12 @@ def main() -> None:
     args = p.parse_args()
 
     if args.cmd in ("universe", "seed"):
-        from .universe import build
+        from .universe import build, refine_sap_identity
         build()
+        refine_sap_identity()
+    if args.cmd == "gt-refine":
+        from .universe import refine_sap_identity
+        refine_sap_identity()
     if args.cmd in ("sap", "seed"):
         from .sap_load import load
         load()

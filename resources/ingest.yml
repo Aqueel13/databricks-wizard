@@ -42,6 +42,15 @@ resources:
           url: /Volumes/${var.catalog}/bronze/landing/_manifests/
           min_time_between_triggers_seconds: 60
           wait_after_last_change_seconds: 75
+      environments:
+        - environment_key: er
+          spec:
+            client: "2"
+            dependencies:
+              - splink==4.0.6
+              - sqlglot==25.32.1
+              - duckdb==1.1.3
+              - unidecode==1.3.8
       tasks:
         - task_key: bronze
           pipeline_task:
@@ -51,3 +60,10 @@ resources:
             - task_key: bronze
           pipeline_task:
             pipeline_id: ${resources.pipelines.wizard_silver.id}
+        - task_key: entity_resolution
+          depends_on:
+            - task_key: silver
+          environment_key: er
+          spark_python_task:
+            python_file: ../er/jobs/run_er.py
+            parameters: ["--er-root", "${workspace.file_path}/er"]

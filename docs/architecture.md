@@ -109,7 +109,7 @@ flowchart LR
 - **Explainability.** `gold.supplier_match_evidence` stores every link with its score, the comparison levels that fired and, where used, the LLM's reason. The MCP tool `explain_supplier_match` reads from it.
 - Evaluation uses a labelled set generated with the synthetic data (the injected duplicates are known), so precision and recall are measured, not guessed.
 
-Details are in [ADR 0004](adr/0004-entity-resolution-approach.md).
+Details are in [ADR 0004](adr/0004-entity-resolution-approach.md), including what the implementation changed from this plan (exact-name tier, cluster constraints, embedding neighbours instead of raw vectors in Splink, the LLM ambiguity guard) and the measured results: pairwise F1 0.968 overall, 0.972 Cyrillic–Latin. The job runs as the third task of `wizard-ingest` (bronze → silver → entity resolution) in about 2 minutes.
 
 ## 5. Knowledge layer (documents)
 

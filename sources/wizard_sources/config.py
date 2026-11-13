@@ -11,6 +11,8 @@ STAGE = ROOT / "data" / "stage"          # generator outputs (parquet), incl. gr
 EXPORTS = ROOT / "data" / "exports"      # file-based sources (HICX exports, documents)
 
 SEED = int(os.environ.get("WIZARD_SEED", "42"))
+# Opt-in generator improvements that change the random sequence (off = reproduce the current data exactly)
+EIN_FORMAT_DEFECTS = os.environ.get("WIZARD_EIN_FORMAT_DEFECTS", "0") == "1"
 
 # Fictional enterprise
 ENTERPRISE = "Larkspur Foods"
