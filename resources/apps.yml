@@ -13,3 +13,12 @@ resources:
           job:
             id: ${resources.jobs.wizard_ingest.id}
             permission: CAN_MANAGE_RUN
+    mcp:
+      name: wizard-mcp
+      description: Databricks Wizard MCP servers - /analytics/mcp, /knowledge/mcp, /stewardship/mcp (supplier intelligence for agents)
+      source_code_path: ../apps/mcp
+      resources:
+        - name: warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE

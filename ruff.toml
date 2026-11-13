@@ -14,4 +14,4 @@ ignore = ["E501", "B905"]   # long SQL strings read better unwrapped; zip(strict
 [lint.isort]
 # the steward app imports its sibling module `data`; pin it, since a local (gitignored) data/ folder would
 # otherwise make ruff classify it differently on a laptop than in CI
-known-local-folder = ["data"]
+known-local-folder = ["data", "wizard_mcp"]

@@ -114,3 +114,23 @@ measures:
   - name: Lifetime Spend USD
     expr: SUM(lifetime_spend_usd)
 $$;
+
+-- ===================================================================== agent support (M7)
+-- Lineage snapshot for the MCP server's trace_metric tool (the app's service principal cannot read system tables).
+CREATE OR REPLACE TABLE wizard.ops.lineage_edges
+COMMENT 'Table-level lineage within the wizard catalog, from system.access.table_lineage (refreshed every run).'
+AS SELECT source_table_full_name AS source, target_table_full_name AS target, max(event_time) AS last_seen
+FROM system.access.table_lineage
+WHERE target_table_catalog = 'wizard' AND source_table_full_name IS NOT NULL
+  AND source_table_full_name <> target_table_full_name
+GROUP BY ALL;
+
+CREATE TABLE IF NOT EXISTS wizard.ops.agent_tool_calls (
+  called_at TIMESTAMP, server STRING, tool STRING, arguments STRING, caller STRING, ok BOOLEAN,
+  rows_returned INT, millis INT, error STRING)
+COMMENT 'Audit log: every MCP tool call made against Databricks Wizard.';
+
+CREATE TABLE IF NOT EXISTS wizard.ops.agent_proposals (
+  proposal_id STRING, kind STRING, item_key STRING, decision STRING, rationale STRING, proposed_by STRING,
+  status STRING, created_at TIMESTAMP, reviewed_by STRING, reviewed_at TIMESTAMP, review_note STRING)
+COMMENT 'Decisions proposed by agents through the stewardship MCP server. Only a person approves them (steward app).';

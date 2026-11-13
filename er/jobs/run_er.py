@@ -169,6 +169,15 @@ save(df[["supplier_id", "source", "source_id", "unique_id", "name", "country", "
             right_index=True, how="left"), "gold.supplier_source_xref",
      derived_from=[("silver.supplier_records", ["source", "source_id"]), ("silver.er_clusters", ["supplier_id"])])
 
+# name index for agent search: every variant (Latin and local script) of every golden supplier with its skeleton
+ni = pd.concat([
+    df[["supplier_id", "source", "source_id", "name", "skeleton"]],
+    df[df["name_local"].notna()][["supplier_id", "source", "source_id", "name_local", "skeleton_local"]]
+      .rename(columns={"name_local": "name", "skeleton_local": "skeleton"}),
+], ignore_index=True).dropna(subset=["name"]).astype(object)
+ni = ni.where(ni.notna(), None).drop_duplicates(["supplier_id", "name"])
+save(ni, "gold.supplier_name_index", derived_from=[("silver.er_clusters", ["supplier_id"])])
+
 # ---------------------------------------------------------------- 4b. sanctions screening + cross-source DQ
 golden = pd.DataFrame(rows)
 sanctions = spark.table(table("silver.sanctions_names")).select(

@@ -43,3 +43,10 @@ def test_ids_and_cities():
     assert normalize_id("NIP", "676-010-74-16") == "NIP:6760107416"
     assert normalize_id("NIP", None) is None
     assert normalize_city("Kyiv") == normalize_city("KYIV")
+
+
+def test_mcp_app_copy_of_normalize_is_identical():
+    """The MCP app ships its own copy (an app only receives its own folder); it must not drift from the ER one."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    assert (root / "apps/mcp/wizard_mcp/normalize.py").read_text() == (root / "er/wizard_er/normalize.py").read_text()
