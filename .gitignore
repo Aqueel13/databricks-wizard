@@ -13,3 +13,5 @@ sources/.venv/
 shipper/.venv/
 .databricks/
 er/.venv/
+# /brag launch-video output (large binaries)
+brag-output/
