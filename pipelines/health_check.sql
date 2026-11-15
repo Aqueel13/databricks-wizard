@@ -11,6 +11,15 @@ SELECT
               'supplier_360 does not match dim_supplier'),
   assert_true((SELECT count_if(status <> 'OK') FROM wizard.bronze.landing_reconciliation) = 0,
               'landing files not reconciled with their manifests'),
+  -- the answer key must describe exactly the records that shipped; a key from another generator build silently
+  -- mislabels records and drags F1 down (2026-11-15: a stale key scored a correct ER run at 0.943)
+  assert_true((SELECT count(*) FROM wizard.silver.supplier_records r
+               LEFT ANTI JOIN parquet.`/Volumes/wizard/ops/ground_truth/gt_source_record.parquet` g
+                 ON g.source_system = r.source AND g.source_id = r.source_id) = 0
+              AND (SELECT count(*) FROM parquet.`/Volumes/wizard/ops/ground_truth/gt_source_record.parquet` g
+                   LEFT ANTI JOIN wizard.silver.supplier_records r
+                     ON g.source_system = r.source AND g.source_id = r.source_id) = 0,
+              'answer key does not match the shipped supplier records (stale ground_truth upload?)'),
   assert_true((SELECT max_by(f1, er_run_at) FROM wizard.ops.er_eval WHERE scope = 'overall') >= 0.95,
               'entity resolution F1 below 0.95 against the answer key'),
   assert_true((SELECT count(*) FROM wizard.silver.doc_extractions) = (SELECT count(*) FROM wizard.silver.doc_parsed),
