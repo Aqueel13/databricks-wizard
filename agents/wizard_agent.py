@@ -188,8 +188,9 @@ def cases() -> list[dict]:
     law = re.sub(r"^the (state|commonwealth|province) of ", "", ctr["law"].lower())
     # sanctions policy: a supplier with an OPEN screening alert (name similarity, not confirmed). Chosen at run
     # time so no real company's name is written next to a sanctions question in the repository.
-    alert = sql("""select legal_name from wizard.gold.supplier_360 where sanctions_alerts > 0 and sanctions_confirmed = 0
-                   order by supplier_id limit 1""")[0]
+    # (sanctions_confirmed lives on supplier_risk_score; supplier_360 only carries the open-alert count)
+    alert = sql("""select s.legal_name from wizard.gold.supplier_360 s join wizard.gold.supplier_risk_score r using (supplier_id)
+                   where r.sanctions_alerts > 0 and r.sanctions_confirmed = 0 order by s.supplier_id limit 1""")[0]
     return [
         dict(id="deteriorating_list", tools={"find_suppliers"},
              q="Which suppliers have deteriorating delivery performance? Name the one with the largest drop.",

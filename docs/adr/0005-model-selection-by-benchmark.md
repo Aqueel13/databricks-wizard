@@ -128,5 +128,20 @@ the Atticus Project's expert answers. Code: `scripts/cuad_bench.py` (I/O) and `s
 - **Coverage in the sample:** 94–100 scored answers per field; "Yes" rates range from 8 (warranty duration) to 71
   (anti-assignment).
 
-Results: pending (needs model serving; the sample is uploaded).
+Results (run 2026-11-15, 100 contracts, no failed responses for any model):
+
+| Model | All fields | "Yes" precision / recall | Governing law | Agreement date | Termination for convenience | Change of control | Time |
+|---|---|---|---|---|---|---|---|
+| `gpt-oss-120b` | **0.912** | **0.90** / 0.78 | **0.97** | 0.84 | **0.89** | **0.91** | 150 s |
+| **`llama-4-maverick`** | 0.894 | 0.79 / 0.88 | 0.95 | 0.88 | 0.85 | 0.82 | 70 s |
+| `qwen3-next-80b-a3b-instruct` | 0.872 | 0.70 / **0.93** | 0.92 | **0.89** | 0.61 | 0.81 | **46 s** |
+| `meta-llama-3-3-70b-instruct` | 0.831 | 0.65 / 0.91 | 0.95 | 0.88 | 0.72 | 0.47 | 79 s |
+
+**Decision:** keep Llama 4 Maverick for document extraction. On real contracts it is second overall, 0.02 behind
+GPT-OSS 120B, with the same "Yes" F1 (0.83 vs 0.84). The two trade off differently: GPT-OSS misses more
+clauses (recall 0.78) and Maverick flags more that aren't there (precision 0.79). For review triage a miss costs
+more than a false flag, and Maverick is twice as fast. **The generated documents overstate accuracy:** the same
+approach that scores 0.999 on this project's own documents (benchmark 3) scores 0.89 on real filings. Judgement clauses
+(termination for convenience, change of control) are the weak spot, so extracted clauses are suggestions for a
+reviewer, not decisions.
 
