@@ -54,16 +54,16 @@ What the built system does, and why it differs from the plan above:
 | Clustering | union-find, strongest evidence first, with **cluster-level constraints**: no merge across different valid national IDs, different jurisdictions or clearly different cities. LLM links are applied last and refused when the LLM matches one record to several clusters (ambiguity, not identity). Refused links → `silver.er_review_queue` |
 | Survivorship | `gold.dim_supplier`: legal name HICX > SAP > Coupa; national ID from validated sources only; local-script name kept; source system ids listed |
 
-### Results (Databricks job, answer key from the generator)
+### Results (Databricks job, answer key from the generator; v2 data, 2026-11-15)
 
 | Metric | Precision | Recall | F1 | Target |
 |---|---|---|---|---|
-| Pairwise, all records | 0.974 | 0.961 | **0.968** | ≥ 0.95 |
-| Pairwise, Cyrillic–Latin | 1.000 | 0.946 | **0.972** | ≥ 0.85 |
-| B-cubed | 0.991 | 0.990 | 0.990 | |
-| Within-system duplicates found | | 40/42 | | |
-| Conflicting addresses flagged | | 29/30 | | |
-| Sanctions near-matches alerted | | 6/6 | | |
+| Pairwise, all records | 0.968 | 0.963 | **0.965** | ≥ 0.95 |
+| Pairwise, Cyrillic–Latin | 0.987 | 0.945 | **0.966** | ≥ 0.85 |
+| B-cubed | 0.989 | 0.991 | 0.990 | |
+| Within-system duplicates found | | 28/30 | | |
+| Conflicting addresses flagged | | 21/21 | | |
+| Sanctions near-matches alerted | | 5/6 | | |
 
 Evolution that mattered, kept for the write-up: baseline F1 0.47 → exact-name tier → constraints → answer-key fix (below) → name-number prior → guarded LLM. The unguarded LLM *lowered* pairwise F1 (0.961) by chaining clusters; the ambiguity guard fixed it.
 
@@ -73,7 +73,8 @@ The generator first grouped SAP demo vendors by `NAME1` + city, so training copi
 
 ### Known limitations
 
-- Sanctions screening is name-only: 82 alerts for 6 planted near-matches. Alerts are for review, never findings. Next step: OFAC addresses (`add.csv`) for country disambiguation.
+- Sanctions screening matches on names, corroborated by OFAC address countries: 80 alerts for 6 planted near-matches, of which 53 are auto-cleared by a country conflict and 27 go to review. Alerts are for review, never findings.
+- A typo inside a legal form defeats normalization: "Joint Stock Compay Obukhovskoye" keeps "compay" in its skeleton, so it scores 0.910 against the sanctioned name, below the 0.92 alert threshold (the one missed near-match). Fuzzy legal-form matching would fix it; lowering the threshold would add alerts for every supplier.
 - Indic scripts and street addresses: see the external benchmark below.
 
 ### External benchmark (Amazon ML Challenge 2026, internal use only)

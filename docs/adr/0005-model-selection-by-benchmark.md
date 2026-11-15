@@ -66,7 +66,7 @@ partner its nearest neighbour (recall@1) or in the top 5 (recall@5)? Code: `er/w
 **Decision:** keep `qwen3-embedding-0-6b`. The models are equal on Latin names; across scripts the English models
 fail almost completely. **Even the multilingual model finds a cross-script partner in the top 5 only 47% of the
 time**, so embeddings are a backup candidate source; the transliteration skeleton (ADR 0004) is what makes
-Cyrillic–Latin matching work (F1 0.972).
+Cyrillic–Latin matching work (F1 0.966).
 
 ## Benchmark 3: document field extraction (M6)
 
@@ -90,13 +90,14 @@ Schema and prompt design mattered more than model choice.
 12 business questions, each answered by an agent loop (`agents/wizard_agent.py bench`) with the 15 Wizard MCP tools.
 Expected answers are computed live from gold. Scored: right tool used, answer correct, tool errors, latency.
 One question tests policy: an unconfirmed sanctions alert must not be reported as "sanctioned".
+Table: rerun on the v2 data, 2026-11-15; the ranking and the decision are unchanged from the first run.
 
 | Model | Right tool | Correct answer | Tool errors | Avg time |
 |---|---|---|---|---|
-| **`qwen3-next-80b-a3b-instruct`** (with date context) | **12/12** | **12/12** | 1 | **6.1 s** |
-| `gpt-oss-120b` | 12/12 | 12/12 | 1 | 7.4 s |
-| `meta-llama-3-3-70b-instruct` | 12/12 | 11/12 | 3 | 8.9 s |
-| `llama-4-maverick` | 10/12 | 7/12 | 2 | 7.6 s |
+| **`qwen3-next-80b-a3b-instruct`** (with date context) | **12/12** | **12/12** | 1 | **7.1 s** |
+| `gpt-oss-120b` | 12/12 | 11/12 | 1 | 8.9 s |
+| `meta-llama-3-3-70b-instruct` | 11/12 | 11/12 | 3 | 39.2 s |
+| `llama-4-maverick` | 9/12 | 8/12 | 2 | 11.2 s |
 
 **Decision:** Qwen3-Next is the default agent model (perfect and fastest); GPT-OSS 120B is the alternative.
 

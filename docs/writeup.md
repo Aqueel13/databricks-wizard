@@ -1,6 +1,5 @@
 # Databricks Wizard: architecture write-up
 
-<!-- NUMBERS: values marked † come from the v1 build and are refreshed after the v2 rebuild -->
 
 Larkspur Foods is a fictional food manufacturer that buys from about 3,200 real-world suppliers through four company codes: US01, NL01, PL01 and UA01. Its supplier data is spread across the same systems most large companies have:
 
@@ -71,7 +70,7 @@ A file arriving with its manifest starts one Lakeflow job. The job runs bronze, 
 | ER adjudication | Qwen3-Next 80B | 0.92 accuracy, 0 false non-matches |
 | Name embeddings | Qwen3 embedding 0.6B | the only one that does anything across scripts |
 | Document extraction | Llama 4 Maverick | 0.999 field accuracy, 1.000 on scanned PDFs |
-| Agent tool-calling | Qwen3-Next 80B | 12/12 † correct, fastest |
+| Agent tool-calling | Qwen3-Next 80B | 12/12 correct, fastest |
 
 Two findings mattered more than the model rankings:
 - Maverick is the best extractor, but it often writes tool calls as plain text. So it is not used for agents.
@@ -97,13 +96,13 @@ Two findings mattered more than the model rankings:
 
 | Area | Exit test | Result |
 |---|---|---|
-| Entity resolution | pairwise F1 vs the answer key | **0.968** † overall, **0.972** † Cyrillic–Latin (targets 0.95 / 0.85) |
+| Entity resolution | pairwise F1 vs the answer key | **0.965** overall, **0.966** Cyrillic–Latin (targets 0.95 / 0.85) |
 | ER, outside our domain | Amazon ML Challenge sample (US + India), no tuning, no LLM | F1 0.829 (US 0.898, India 0.717) |
-| Data quality | planted single-source defects found | all † |
-| Delivery drift | market-adjusted deterioration rule | 6 of 8 † detectable planted suppliers, plus 12 real deteriorations in the untouched SAP history |
-| Business questions | Genie answers the 4 core questions, scored against gold | 4/4 † |
-| Documents | cited answers / planted metadata mismatches | 40/40 † / 28 of 28 †, no false positives |
-| Agents | 12 business questions over MCP | 12/12 † |
+| Data quality | planted single-source defects found | all |
+| Delivery drift | market-adjusted deterioration rule | 6 of 10 testable planted suppliers, plus 9 real deteriorations in the untouched SAP history |
+| Business questions | Genie answers the 4 core questions, scored against gold | 4/4 |
+| Documents | cited answers / planted metadata mismatches | 40/40 / 26 of 26, no false positives |
+| Agents | 12 business questions over MCP | 12/12 |
 | Governance | masks, row filter, CI deploy, lineage end to end | all pass |
 
 **Lineage is end to end.**
@@ -115,7 +114,7 @@ Two findings mattered more than the model rankings:
 
 - **The answer key was wrong before the matcher was.** SAP training copies of the same vendor were grouped inconsistently, so no matcher could score well. Fixing the key without touching the data (checksums verified) was worth more than any tuning.
 - **A planted problem nobody could detect isn't a test.** The first delivery-drift storyline sat inside real-data noise: the best rule found 4 suppliers and raised 25 false alarms. The drift was redone at a realistic size, and the rule was made market-adjusted, because the market on-time rate swings between 31% and 77% month to month.
-- **Name-only sanctions screening alerts too often.** It raised 82 alerts for 6 planted near-matches. Adding OFAC addresses showed that 55 of 76 open alerts had a country conflict. Those can be auto-cleared when the name isn't near-exact, and an alert is never shown as a finding.
+- **Name-only sanctions screening alerts too often.** It raised 80 alerts for 6 planted near-matches. Adding OFAC addresses showed that 55 of the 80 had a country conflict. Those can be auto-cleared when the name isn't near-exact, and an alert is never shown as a finding.
 - **Free Edition limits are design inputs.**
   - Tables per schema: every pipeline table also creates a hidden materialization table, so it counts twice against the 100-table limit.
   - One Vector Search endpoint.

@@ -1,6 +1,5 @@
 # Business case: a governed Supplier 360
 
-<!-- NUMBERS: values marked † come from the v1 build and are refreshed after the v2 rebuild -->
 
 This page is written for a procurement or finance leader deciding whether to fund a supplier data foundation like Databricks Wizard. It separates three kinds of number:
 
@@ -27,7 +26,7 @@ When the same supplier exists as three records in three systems, every supplier 
 Each driver comes with the evidence this project produced and the formula a real company would fill in. All figures are annual.
 
 **1. Spend visibility → negotiation leverage.**
-- Evidence: every supplier source record across SAP, Coupa and HICX is resolved to a golden record, at pairwise F1 0.968 † against the answer key. It works across scripts: Cyrillic–Latin F1 is 0.972 †.
+- Evidence: every supplier source record across SAP, Coupa and HICX is resolved to a golden record, at pairwise F1 0.965 against the answer key. It works across scripts: Cyrillic–Latin F1 is 0.966.
 - On an external benchmark outside the supplier domain, with no tuning, the matcher reaches F1 0.829.
 - Formula: `addressable spend × share newly consolidated × negotiated saving`.
 - Assumption to replace: the saving rate the category team believes is achievable once volumes are visible per supplier.
@@ -40,13 +39,13 @@ Each driver comes with the evidence this project produced and the formula a real
 
 **3. Steward and analyst time.**
 - Evidence: the matcher auto-decides most pairs. A Qwen3-Next adjudicator settles the uncertain middle band with 0 false non-matches on the benchmark. Only refused or unsure links reach the steward queue.
-- Genie answers the four core supplier questions correctly, scored against gold: 4/4 †.
+- Genie answers the four core supplier questions correctly, scored against gold: 4/4.
 - Formula: `hours per month on manual reconciliation and ad-hoc supplier queries × loaded hourly cost × share removed`.
 
 **4. Compliance and supply risk.**
-- Evidence: expired certificates are caught from the document itself. All 28 † planted document/system mismatches were found, with no false positives.
+- Evidence: expired certificates are caught from the document itself. All 26 planted document/system mismatches were found, with no false positives.
 - Sanctions near-matches are always alerted (6 of 6), and alerts with a conflicting country are auto-cleared.
-- Supplier deterioration is flagged on a market-adjusted basis. It also found 12 real deteriorations in the untouched SAP history.
+- Supplier deterioration is flagged on a market-adjusted basis. It also found 9 real deteriorations in the untouched SAP history.
 - Formula: `expected incidents avoided × cost per incident`. This value is real but hard to put a number on, so treat it as risk reduction rather than savings.
 
 **5. AI readiness (an option, not a saving).**
