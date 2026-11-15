@@ -53,8 +53,7 @@ resources:
       queue:
         enabled: true
       trigger:
-        # PAUSED during the v2 rebuild (full refresh is run by hand); set back to UNPAUSED when it completes
-        pause_status: PAUSED
+        pause_status: UNPAUSED
         file_arrival:
           url: /Volumes/${var.catalog}/bronze/landing/_manifests/
           min_time_between_triggers_seconds: 60
