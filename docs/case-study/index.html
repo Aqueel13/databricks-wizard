@@ -110,8 +110,8 @@ footer{margin:4rem 0 0;padding:2rem 0 3rem;border-top:1px solid var(--line);font
     <span class="url">github.com/Aqueel13/databricks-wizard</span>
   </div>
   <div class="stats">
-    <div class="stat"><b class="n">0.968</b><span>entity-resolution F1 against a known answer key</span></div>
-    <div class="stat"><b class="n">0.972</b><span>F1 matching Cyrillic names to Latin ones</span></div>
+    <div class="stat"><b class="n">0.965</b><span>entity-resolution F1 against a known answer key</span></div>
+    <div class="stat"><b class="n">0.966</b><span>F1 matching Cyrillic names to Latin ones</span></div>
     <div class="stat"><b class="n">12/12</b><span>agent questions answered correctly over MCP</span></div>
     <div class="stat"><b>₹0</b><span>Databricks Free Edition and local Docker</span></div>
   </div>
@@ -256,19 +256,20 @@ footer{margin:4rem 0 0;padding:2rem 0 3rem;border-top:1px solid var(--line);font
   <div class="table-scroll"><table>
     <thead><tr><th>Area</th><th>Result</th><th>How it was measured</th></tr></thead>
     <tbody>
-      <tr><td>Entity resolution</td><td class="num n">F1 0.968</td><td>Pairwise against the answer key (target 0.95)</td></tr>
-      <tr><td>Across scripts</td><td class="num n">F1 0.972</td><td>Cyrillic–Latin pairs (target 0.85)</td></tr>
+      <tr><td>Entity resolution</td><td class="num n">F1 0.965</td><td>Pairwise against the answer key (target 0.95)</td></tr>
+      <tr><td>Across scripts</td><td class="num n">F1 0.966</td><td>Cyrillic–Latin pairs (target 0.85)</td></tr>
       <tr><td>Outside the domain</td><td class="num">F1 0.829</td><td>Amazon ML Challenge sample, US and India, no tuning and no LLM (India 0.377 → 0.717 after adding Indic legal forms and address comparison)</td></tr>
       <tr><td>Business questions</td><td class="num n">4 / 4</td><td>Genie's answers scored against gold</td></tr>
       <tr><td>Document Q&amp;A</td><td class="num n">40 / 40</td><td>Answers and citations correct</td></tr>
-      <tr><td>Document mismatches</td><td class="num n">28 / 28</td><td>Planted PDF-vs-system disagreements found, 0 false positives</td></tr>
+      <tr><td>Document mismatches</td><td class="num n">26 / 26</td><td>Planted PDF-vs-system disagreements found, 0 false positives</td></tr>
       <tr><td>Field extraction</td><td class="num">0.999</td><td>Llama 4 Maverick on 80 documents, 1.000 on scanned certificates</td></tr>
+      <tr><td>Real contracts</td><td class="num n">0.89</td><td>Same extraction on 100 SEC-filed contracts (CUAD), scored against expert labels: what the generated documents overstate</td></tr>
       <tr><td>Agents over MCP</td><td class="num n">12 / 12</td><td>Right tool and correct answer, including a policy question</td></tr>
       <tr><td>Governance</td><td class="num">pass</td><td>Masks, company-code row filter, CI deploy, lineage to the landing file</td></tr>
     </tbody>
   </table></div>
   <h3>Models chosen by benchmark</h3>
-  <p>Four benchmarks on the same platform picked three different models.</p>
+  <p>Five benchmarks on the same platform picked three different models.</p>
   <ul>
     <li>Qwen3-Next 80B adjudicates matches (0.92 accuracy, no false non-matches) and runs the agents.</li>
     <li>Llama 4 Maverick extracts document fields best, but often writes tool calls as plain text, so it isn't used for agents.</li>
@@ -319,7 +320,7 @@ footer{margin:4rem 0 0;padding:2rem 0 3rem;border-top:1px solid var(--line);font
     <li><div class="what">The answer key was wrong before the matcher was</div><div>SAP training copies of one vendor were grouped inconsistently, so no matcher could score well. Fixing the key without touching the data (checksums verified) was worth more than any tuning.</div></li>
     <li><div class="what">A planted problem nobody could detect isn't a test</div><div>The first delivery-drift storyline sat inside real-data noise. It was redone at a realistic size, and the rule was made market-adjusted, because the market's on-time rate swings between 31% and 77% month to month. The rule also found real declines in the untouched SAP history.</div></li>
     <li><div class="what">A missing tool, not a weak model</div><div>Every model failed the spend-concentration question by writing broken SQL. One governed tool fixed it for all of them.</div></li>
-    <li><div class="what">Name-only screening alerts too often</div><div>It raised 82 alerts for 6 planted near-matches. OFAC addresses showed that most alerts had a country conflict, so those are now cleared automatically when the name isn't near-exact.</div></li>
+    <li><div class="what">Name-only screening alerts too often</div><div>It raised 80 alerts for 6 planted near-matches. OFAC addresses showed that most alerts had a country conflict, so those are now cleared automatically when the name isn't near-exact.</div></li>
     <li><div class="what">The deploy permissions trap</div><div>Declaring permissions in an Asset Bundle makes the deployer the owner of every job, which only an admin may do. CI was fixed by granting access once, outside the bundle.</div></li>
   </ul>
 </section>
