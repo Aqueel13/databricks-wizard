@@ -13,7 +13,8 @@ CALLS = {
     "analytics": [("search_suppliers", {"query_text": "Yug Agros"}),
                   ("query_metric", {"metric": "on_time_rate", "group_by": ["deteriorating_supplier"],
                                     "period_from": "2026-05-01"}),
-                  ("trace_metric", {"metric": "spend_usd"})],
+                  ("trace_metric", {"metric": "spend_usd"}),
+                  ("list_delivery_alerts", {"status": "open", "limit": 3})],
     "knowledge": [("answer_document_question", {"question": "Which law governs agreement CTR-00160?"})],
     "stewardship": [("list_review_items", {"kind": "match", "limit": 2})],
 }
